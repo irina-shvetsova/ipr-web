@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ИПР·AI · План развития</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="top">
+  <button class="logo" data-home="1" title="На главную" aria-label="ИПР·AI, на главную">ИПР<span>·</span>AI</button><span class="proto">бета</span>
+  <div class="stepper" id="stepper"></div>
+  <div class="who" id="who"></div>
+  
+</header>
+
+<section id="startScr" class="start">
+  <div class="shero">
+    <div class="svc">ИПР·AI · индивидуальный план развития</div>
+    <h1>План развития <em>на год</em></h1>
+    <p>Загрузи любые материалы или расскажи о работе: черновик соберётся сразу. Чем больше данных, тем глубже черновик.</p>
+        <ol>
+      <li><span class="n">01</span><span><b>Черновик</b>Собирается сразу, без анкеты.</span></li>
+      <li><span class="n">02</span><span><b>Уточнение</b>Несколько коротких вопросов. План перестраивается после каждого подтверждённого ответа.</span></li>
+      <li><span class="n">03</span><span><b>Готово к встрече</b>Документ с вопросами к руководителю.</span></li>
+    </ol>
+  </div>
+  <div class="scard" id="scard"></div>
+</section>
+
+<section id="finalScr" class="final hidden">
+  <div class="fbar"><div class="fbar-in">
+    <button class="btn ghost sm" data-back="1">Вернуться к правкам</button>
+    <div class="fsp"></div>
+    <button class="btn ghost sm" data-dl="docx">Скачать Word</button>
+    <button class="btn sm" data-dl="pdf">Скачать PDF</button>
+  </div></div>
+  <div class="fwrap">
+    <div class="fdoc" id="fdoc"></div>
+    <aside class="fside" id="fside"></aside>
+  </div>
+</section>
+<section id="workScr" class="work hidden">
+  <aside class="side">
+    <div class="tabs" role="tablist"><button class="tab on" role="tab" aria-selected="true" data-tab="ask">Уточнить</button><button class="tab" role="tab" aria-selected="false" data-tab="tutor">Тьютор</button></div>
+    <div class="sbody" id="sbody"></div>
+    <div class="sfoot" id="sfoot"></div>
+  </aside>
+  <main class="docwrap" id="docwrap"><div class="paper" id="paper"></div><div id="rb" role="status" aria-live="polite"></div></main>
+</section>
+<div class="mbar" id="mbar"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="hist"></div>
+<div id="tour"></div>
+<input type="file" id="file" hidden multiple>
+<script src="config.js"></script>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
