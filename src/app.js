@@ -10,7 +10,7 @@ const api = autoBase === 'demo' ? new DemoApi() : new HttpApi(autoBase);
 const U = {
   screen: 'start', plan: null, planId: null, tab: 'ask', open: null, pend: {}, msgs: [], flash: {}, changes: [],
   wmOpen: null, mview: false, mvPlan: null, mvHidden: [], files: [], tasks: [], story: '', name: '', role: '',
-  loginSent: null, plans: [], job: null, managerOnly: false, busy: false,
+  preview: false, saved: null, loginSent: null, plans: [], job: null, managerOnly: false, busy: false,
 };
 const DEMO_FILES = [
   { file: 'm1_360_profocenka.md', label: 'Отчёт 360' },
@@ -93,18 +93,72 @@ function startHTML() {
   }
   const mgrPlans = U.plans.filter(p => p.role === 'manager');
   if (mgrPlans.length) h += `<div class="resume"><div><span class="svc2">Планы сотрудников</span><b>${mgrPlans.map(p => esc(p.name || p.plan_id)).join(', ')}</b><small>Версии, которые сотрудники отправили к встрече.</small></div><div class="rb2">${mgrPlans.map(p => `<button class="btn ghost" data-openmgr="${esc(p.plan_id)}">${esc(p.name || 'Открыть')}</button>`).join('')}</div></div>`;
-  h += '<div class="sblock"><h3>О тебе</h3>'
-    + `<div class="field2"><label for="meName">Имя</label><input id="meName" type="text" placeholder="Например: Марина" value="${esc(U.name)}"></div>`
-    + `<div class="field2"><label for="meRole">Роль</label><input id="meRole" type="text" placeholder="Например: руководитель группы аналитики" value="${esc(U.role)}"></div>`
-    + `<div class="field2"><label for="taskIn">Задачи квартала</label><div class="chips">${U.tasks.map((t, i) => `<button class="chip on" data-rmtask="${i}" title="Убрать">${esc(t)} ×</button>`).join('')}</div><div class="addtask"><input id="taskIn" type="text" placeholder="Например: пилот модели прогноза спроса к концу Q2"><button class="btn ghost" data-addtask="1">Добавить</button></div></div>`
-    + `<div class="field2"><label for="story">Расскажи о работе <span style="font-weight:400;color:var(--muted)">· по желанию</span></label><textarea id="story" rows="3" placeholder="На что уходит время, что получается, что хочется изменить">${esc(U.story)}</textarea></div></div>`;
-  h += `<div class="sblock"><h3>Материалы <span style="font-weight:400;color:var(--muted)">· по желанию</span></h3><p class="sh2">Отчёт 360 любой методики, прошлый ИПР, заметки, описание должности. Тип документа определим сами.</p>`;
-  if (U.files.length) h += '<div class="files">' + U.files.map((f, i) => `<div class="file${f.readable === false ? ' bad' : ''}"><span class="fi">${f.readable === false ? '!' : 'DOC'}</span><span class="fn"><b>${esc(f.name)}</b><small>${f.readable === false ? esc(f.reason || 'Не удалось прочитать') : 'Будет прочитан при сборке'}</small></span><button class="x" data-rmfile="${i}" aria-label="Убрать файл">×</button></div>`).join('') + '</div>';
-  h += '<button class="drop sm" id="drop" type="button"><b>Перетащи файлы или выбери</b><small>Сейчас читаются .txt, .md, .csv. PDF и Word скоро</small></button>';
-  h += `<div class="demos">Примеры: ${DEMO_FILES.map((f, i) => `<button class="chip${U.files.some(x => x.name === f.file) ? ' on' : ''}" data-demof="${i}">${esc(f.label)}</button>`).join('')} <button class="link" data-demoall="1">Заполнить примером</button></div></div>`;
-  const can = U.role.trim() && (U.files.length || U.story.trim().length > 20);
-  h += `<button class="btn wide" data-start="1"${can ? '' : ' disabled'}>Собрать черновик</button>${can ? '' : '<p class="hintline">Укажи роль и добавь материалы или расскажи о работе.</p>'}`;
+  const hasFiles = U.files.length > 0;
+  h += '<div class="sblock"><h3>Материалы <span style="font-weight:400;color:var(--muted)">· по желанию</span></h3><p class="sh2">Отчёт 360, Delta, прошлый ИПР, самооценка, описание должности, заметки после встреч. Тип документа определим сами.</p>';
+  if (hasFiles) h += '<div class="files">' + U.files.map(fileRow).join('') + '</div>';
+  h += '<button class="drop sm" id="drop" type="button"><b>Перетащи файлы или выбери</b><small>TXT, MD, CSV. Можно несколько. PDF, Word и Excel скоро</small></button>';
+  h += `<div class="demos">Примеры: ${DEMO_FILES.map((f, i) => { const on = U.files.some(x => x.name === f.file); return `<button class="chip${on ? ' on' : ''}" data-demof="${i}" aria-pressed="${on}">${esc(f.label)}</button>`; }).join('')}</div>`;
+  const badOn = U.files.some(x => x.demoBad);
+  h += `<p class="badlink"><button class="link" data-demobad="1" type="button">${badOn ? 'Убрать пример ошибки' : 'Показать, что будет, если файл не прочитается'}</button></p>`;
+  if (!hasFiles) h += '<p class="hintline">Не знаешь, что загрузить? Подойдёт любой документ о тебе и работе. Если ничего нет, просто расскажи о работе ниже.</p>';
+  h += '</div>';
+  h += `<div class="sblock"><h3>О работе</h3><p class="sh2">${hasFiles ? 'Дополнит материалы. Можно пропустить.' : 'Если загрузить нечего, этого хватит для черновика.'}</p>`;
+  h += `<div class="field2"><label for="meName">Как тебя зовут</label><input id="meName" type="text" placeholder="Необязательно" value="${esc(U.name)}"></div>`;
+  h += `<div class="field2"><label for="meRole">Роль</label><input id="meRole" type="text" placeholder="Например: руководитель группы аналитики или эксперт" value="${esc(U.role)}"><div class="rolechips">${ROLES.map(r => `<button class="chip${U.role === r ? ' on' : ''}" data-role="${esc(r)}" type="button">${esc(r)}</button>`).join('')}</div></div>`;
+  h += `<div class="field2"><label>Какие задачи у тебя в этом квартале</label>${tasksHTML()}</div>`;
+  h += `<div class="field2"><label for="story">Что сейчас забирает больше всего времени</label><textarea id="story" rows="2" placeholder="Например: недельный отчёт собираю без команды, потому что так быстрее">${esc(U.story)}</textarea><small>Из этого ответа строится объяснение того, куда на самом деле уходит время.</small></div></div>`;
+  h += `<div class="basis" id="basis">${basisInner()}</div>`;
+  h += `<button class="btn wide" data-start="1" type="button"${canBuild() ? '' : ' disabled'}>Собрать черновик</button>`;
+  h += `<p class="demoline">Заполнить примером: <button class="link" data-demo="lead" type="button">руководитель группы</button>${api.demo ? '' : '<button class="link" data-demo="spec" type="button">ведущий аналитик</button>'}</p>`;
   return h;
+}
+
+// ---------------------------------------------------------------- старт: задачи, файлы, основание
+
+const ROLES = ['Руководитель группы', 'Руководитель отдела', 'Эксперт', 'Менеджер проекта'];
+const ROLE_TASKS = {
+  'Руководитель группы': ['Квартальная отчётность', 'Проверка работы команды', 'Согласования с дирекцией', 'Запуск нового направления', 'Найм в команду', 'Развитие команды'],
+  'Руководитель отдела': ['Согласования с дирекцией', 'Запуск нового направления', 'Найм в команду', 'Развитие команды', 'Квартальная отчётность'],
+  'Эксперт': ['Экспертиза по проектам', 'Методология и стандарты', 'Обучение коллег', 'Запуск нового направления', 'Согласования с дирекцией'],
+  'Менеджер проекта': ['Сроки проекта', 'Работа с заказчиком', 'Запуск нового направления', 'Квартальная отчётность', 'Развитие команды'],
+};
+const GENERIC_TASKS = ['Квартальная отчётность', 'Запуск нового направления', 'Согласования с дирекцией', 'Развитие команды', 'Обучение коллег'];
+function roleKey() {
+  const r = U.role.trim();
+  if (ROLE_TASKS[r]) return r;
+  if (/руковод.*отдел/i.test(r)) return 'Руководитель отдела';
+  if (/руковод/i.test(r)) return 'Руководитель группы';
+  if (/эксперт|аналитик|специалист/i.test(r)) return 'Эксперт';
+  if (/проект/i.test(r)) return 'Менеджер проекта';
+  return null;
+}
+function tasksHTML() {
+  const rk = roleKey();
+  const sug = rk ? ROLE_TASKS[rk] : GENERIC_TASKS;
+  const all = [...sug, ...U.tasks.filter(t => !sug.includes(t))];
+  const src = rk ? `Подсказки для роли «${low(U.role.trim() || rk)}». Отметь подходящие или впиши своё.` : 'Типовые задачи: укажи роль, и подсказки станут точнее. Отметь подходящие или впиши своё.';
+  return `<p class="cloudsrc">${esc(src)}</p><div class="chips">${all.map(t => { const on = U.tasks.includes(t); return `<button class="chip${on ? ' on' : ''}" data-tk="${esc(t)}" aria-pressed="${on}" type="button">${esc(t)}${sug.includes(t) ? '' : '<span class="stag">своё</span>'}</button>`; }).join('')}</div>`
+    + '<div class="addtask"><input id="taskIn" type="text" aria-label="Своя задача" placeholder="Своя задача, например: переезд на новую систему"><button class="btn ghost" data-addtask="1" type="button">Добавить</button></div>';
+}
+function fileRow(f, i) {
+  if (f.readable === false) return `<div class="file bad"><span class="fi">!</span><span class="fn"><b>${esc(f.name)}</b><small>${esc(f.reason || 'Не удалось прочитать файл')}. Остальные документы ждать не будут.</small></span><button class="x" data-rmfile="${i}" aria-label="Убрать файл">×</button></div>`;
+  return `<div class="file"><span class="fi">${/360/.test(f.name) ? '360' : 'DOC'}</span><span class="fn"><b>${esc(f.label || f.name)}</b><small>Тип документа и о ком он, определим при сборке</small></span><button class="x" data-rmfile="${i}" aria-label="Убрать файл">×</button></div>`;
+}
+const okFiles = () => U.files.filter(f => f.readable !== false);
+const canBuild = () => okFiles().length > 0 || (U.role.trim() && U.tasks.length > 0);
+function basisInner() {
+  const n = okFiles().length;
+  const bp = [];
+  if (n) bp.push(`${n} ${plural(n, 'файла', 'файлов', 'файлов')}`);
+  if (U.role.trim()) bp.push('роли');
+  if (U.tasks.length) bp.push('задач квартала');
+  if (U.story.trim()) bp.push('рассказа о работе');
+  if (!bp.length || !canBuild()) return 'Загрузи хотя бы один файл или укажи роль и задачи.';
+  return `Черновик соберём из: <b>${esc(listRu(bp))}</b>.` + (n ? '' : '<span class="warnl">Без документов не будет объяснений того, как тебя видят коллеги. Документ скажет об этом прямо.</span>');
+}
+function refreshBasis() {
+  const b = $('#basis'); if (b) b.innerHTML = basisInner();
+  const s = document.querySelector('[data-start]'); if (s) s.disabled = !canBuild();
 }
 
 // ---------------------------------------------------------------- боковая панель
@@ -224,6 +278,12 @@ function renderDoc() {
 // ---------------------------------------------------------------- готовый план
 
 function renderFinal() {
+  if (U.preview) {
+    $('.fbar-in').innerHTML = '<span class="pvnote">Это пример готового плана. Твой будет собран из твоих данных.</span><div class="fsp"></div><button class="btn sm" data-endpreview="1">Собрать свой план</button>';
+    $('#fdoc').innerHTML = planHTML(U.plan, { mode: 'final' });
+    $('#fside').innerHTML = '<div class="fcard"><h3>Как устроен план</h3><ol><li>«Главное»: с чего начать и почему.</li><li>Разделы 1–2: на чём построен план и объяснения по зонам роста.</li><li>Раздел 3: направления с шагами на квартал.</li><li>Разделы 4–6: обучение, точки контроля и вопросы к руководителю.</li></ol></div><div class="fcard"><h3>Как начать</h3><p>Загрузи материалы или расскажи о работе. Черновик соберётся сразу, потом его можно уточнить.</p><button class="btn ghost wide" data-endpreview="1">Собрать свой план</button></div>';
+    return;
+  }
   const mv = U.mview || U.managerOnly;
   const p = mv ? U.mvPlan : U.plan;
   $('.fbar-in').innerHTML = U.managerOnly
@@ -246,6 +306,7 @@ function renderFinal() {
 function renderMbar() {
   let h = '';
   if (U.screen === 'work') h = allDone() ? '<button class="btn" data-go="final">Готовый план</button>' : '<button class="btn" data-goq="1">Ответить на вопросы</button>';
+  else if (U.screen === 'final' && U.preview) h = '<button class="btn" data-endpreview="1">Собрать свой план</button>';
   else if (U.screen === 'final' && !U.managerOnly) h = '<button class="btn ghost" data-back="1">К правкам</button><button class="btn" data-dl="pdf">Скачать</button>';
   $('#mbar').innerHTML = h;
 }
@@ -262,8 +323,9 @@ function render() {
 // ---------------------------------------------------------------- действия
 
 function bindStart() {
-  const keep = (id, key) => { const el = $('#' + id); if (el) el.addEventListener('input', () => { U[key] = el.value; const b = document.querySelector('[data-start]'); if (b) b.disabled = !(U.role.trim() && (U.files.length || U.story.trim().length > 20)); }); };
+  const keep = (id, key) => { const el = $('#' + id); if (el) el.addEventListener('input', () => { U[key] = el.value; refreshBasis(); }); };
   keep('meName', 'name'); keep('meRole', 'role'); keep('story', 'story');
+  const ri = $('#meRole'); if (ri) ri.addEventListener('change', () => render());
   const ti = $('#taskIn'); if (ti) ti.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.querySelector('[data-addtask]').click(); } });
   const em = $('#email'); if (em) em.addEventListener('keydown', e => { if (e.key === 'Enter') document.querySelector('[data-login]').click(); });
   const drop = $('#drop');
@@ -296,7 +358,7 @@ async function startBuild() {
   try {
     const c = await api.createPlan({ profile: { name: U.name.trim(), role: U.role.trim(), persona: /руковод/i.test(U.role) ? 'lead' : 'spec' }, tasks: U.tasks, story: U.story });
     U.planId = c.plan.plan_id;
-    for (const f of U.files) {
+    for (const f of U.files.filter(x => !x.demoBad)) {
       const r = await api.upload(U.planId, f.name, f.base64);
       if (!r.material.readable) toast(`${f.name}: ${r.material.reason}`);
     }
@@ -389,6 +451,27 @@ async function loadManagerView() {
   U.mvPlan = r.plan; U.mvHidden = r.hidden || r.plan.hidden_in_view || [];
 }
 
+async function openPreview() {
+  const snap = await (await fetch('demo/plan_demo.json')).json();
+  U.saved = { plan: U.plan, planId: U.planId, screen: U.screen, mview: U.mview };
+  const plan = snap.variants?.['time:3'] || snap.base;
+  plan.answers = { ...plan.answers, confirmed: ['prev', 'tasks', 'time', 'goal', 'prio'] };
+  U.plan = plan; U.planId = null; U.preview = true; U.mview = false; U.screen = 'final';
+  render(); window.scrollTo(0, 0);
+}
+function endPreview() {
+  Object.assign(U, U.saved || {}, { preview: false, saved: null, screen: 'start' });
+  render(); window.scrollTo(0, 0);
+}
+function showHelp() {
+  $('#hist').innerHTML = '<div class="histp help"><div class="hh"><b>Как пользоваться</b><button class="x" data-hclose="1" aria-label="Закрыть">×</button></div>'
+    + '<p>Три шага, анкеты нет.</p><ol>'
+    + '<li><span class="vn">1</span><span class="vt"><b>Загрузи материалы или расскажи о работе</b><small>Подойдут отчёт 360 любой методики, прошлый ИПР, заметки после встреч, описание должности. Если документов нет, хватит роли и задач квартала.</small></span></li>'
+    + '<li><span class="vn">2</span><span class="vt"><b>Уточни черновик</b><small>Слева несколько коротких вопросов. После каждого ответа план перестраивается. Объяснения, которые не про тебя, можно отклонить. Тьютору можно написать своими словами: перенести шаг, сделать короче.</small></span></li>'
+    + '<li><span class="vn">3</span><span class="vt"><b>Подготовься к встрече</b><small>Проверь, как план увидит руководитель, скачай документ или отправь ссылку. Все версии хранятся в истории.</small></span></li>'
+    + '</ol><p><button class="link" data-preview="1">Посмотреть пример готового плана</button></p></div>';
+}
+
 document.addEventListener('click', async e => {
   const el = e.target.closest('button,[data-go]');
   if (!el) return;
@@ -396,18 +479,35 @@ document.addEventListener('click', async e => {
   try {
     if (d.go) { if (d.go === 'final' && !allDone()) { toast('Сначала ответь на вопросы'); return; } U.screen = d.go; U.mview = false; render(); window.scrollTo(0, 0); return; }
     if (d.back) { U.screen = 'work'; U.mview = false; render(); return; }
-    if (el.closest('[data-home]')) { if (!U.managerOnly) { U.screen = 'start'; render(); } return; }
+    if (el.closest('[data-home]')) { if (U.preview) { endPreview(); return; } if (!U.managerOnly) { U.screen = 'start'; render(); } return; }
     if (d.login) { const email = $('#email').value.trim(); U.loginSent = { email, ...(await api.login(email)) }; render(); return; }
     if (d.relogin) { U.loginSent = null; render(); return; }
-    if (d.addtask) { const v = $('#taskIn').value.trim(); if (v.length > 2) { U.tasks.push(v); render(); $('#taskIn').focus(); } return; }
-    if (d.rmtask) { U.tasks.splice(+d.rmtask, 1); render(); return; }
+    if (d.addtask) { const v = cap($('#taskIn').value.trim()); if (v.length > 2 && !U.tasks.includes(v)) { U.tasks.push(v); render(); $('#taskIn').focus(); } return; }
+    if (d.tk) { const i = U.tasks.indexOf(d.tk); if (i > -1) U.tasks.splice(i, 1); else U.tasks.push(d.tk); render(); return; }
+    if (d.role) { U.role = U.role === d.role ? '' : d.role; render(); return; }
+    if (d.demobad) {
+      if (U.files.some(x => x.demoBad)) U.files = U.files.filter(x => !x.demoBad);
+      else U.files.push({ name: 'Скан_заметок.jpg', readable: false, demoBad: true, reason: 'Не удалось прочитать файл' });
+      render(); return;
+    }
+    if (d.preview) { $('#hist').innerHTML = ''; await openPreview(); return; }
+    if (d.endpreview) { endPreview(); return; }
+    if (d.help) { showHelp(); return; }
     if (d.rmfile) { U.files.splice(+d.rmfile, 1); render(); return; }
     if (d.demof) { await addDemo(+d.demof); return; }
-    if (d.demoall) {
-      U.name = 'Марина'; U.role = 'Руководитель группы клиентской аналитики';
-      U.tasks = ['Регулярная отчётность для дирекции', 'Проверка работы команды', 'Пилот модели прогноза спроса', 'Согласование приоритетов с категорийным менеджментом'];
+    if (d.demo === 'lead') {
+      U.name = 'Марина'; U.role = 'Руководитель группы';
+      U.tasks = ['Квартальная отчётность', 'Проверка работы команды', 'Согласования с дирекцией', 'Пилот модели прогноза спроса'];
+      U.story = 'Недельный отчёт для дирекции собираю сама, потому что так быстрее, чем объяснять группе.';
       for (let i = 0; i < DEMO_FILES.length; i++) if (!U.files.some(x => x.name === DEMO_FILES[i].file)) await addDemo(i);
       return;
+    }
+    if (d.demo === 'spec') {
+      U.name = 'Алексей'; U.role = 'Ведущий аналитик';
+      U.tasks = ['Экспертиза по проектам', 'Методология и стандарты', 'Обучение коллег'];
+      U.story = 'Большую часть недели отвечаю на вопросы коллег по методике расчёта, на собственные проекты остаются вечера.';
+      U.files = U.files.filter(x => x.demoIndex === undefined && !x.demoBad);
+      render(); return;
     }
     if (d.start) { el.disabled = true; await startBuild(); return; }
     if (d.openplan) { await openPlan(d.openplan); return; }

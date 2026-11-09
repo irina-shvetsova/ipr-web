@@ -509,3 +509,7 @@ table.ptab td:first-child{width:42%}
 .wsteps{list-style:none;padding:0;margin:0}
 .wsteps>li{margin:0 0 12px;line-height:1.5}
 .wsteps .when2{margin-right:8px}
+
+/* панель «Как пользоваться» */
+.histp.help li{align-items:flex-start}
+.histp.help .vn{padding-top:2px}
