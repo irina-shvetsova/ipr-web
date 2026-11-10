@@ -8,7 +8,12 @@ export class HttpApi {
     this.session = null;
     try { this.session = localStorage.getItem('ipr_session'); } catch { /* хранилище недоступно */ }
   }
-  setSession(t) { this.session = t; try { t ? localStorage.setItem('ipr_session', t) : localStorage.removeItem('ipr_session'); } catch { /* */ } }
+  setSession(t, persist = true) {
+    this.session = t;
+    this.temp = !persist;
+    if (!persist) return; // временная сессия (ссылка руководителя) не затирает свою сессию браузера
+    try { t ? localStorage.setItem('ipr_session', t) : localStorage.removeItem('ipr_session'); } catch { /* */ }
+  }
   async req(method, path, body) {
     const res = await fetch(this.base + path, {
       method,
@@ -16,12 +21,14 @@ export class HttpApi {
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401) this.setSession(null);
+    if (res.status === 401) this.setSession(null, !this.temp);
     if (!res.ok) { const e = new Error(data.error || `Ошибка ${res.status}`); e.status = res.status; throw e; }
     return data;
   }
+  authConfig() { return this.req('GET', '/auth/config'); }
+  async guest(code) { const r = await this.req('POST', '/auth/guest', { code }); this.setSession(r.session); return r; }
   login(email) { return this.req('POST', '/auth/login', { email }); }
-  async verify(token) { const r = await this.req('POST', '/auth/verify', { token }); this.setSession(r.session); return r; }
+  async verify(token, persist = true) { const r = await this.req('POST', '/auth/verify', { token }); this.setSession(r.session, persist); return r; }
   listPlans() { return this.req('GET', '/plans'); }
   createPlan(b) { return this.req('POST', '/plans', b); }
   upload(planId, name, base64) { return this.req('POST', `/plans/${planId}/materials`, { file_name: name, content_base64: base64 }); }
@@ -40,6 +47,7 @@ export class DemoApi {
   constructor(url = 'demo/plan_demo.json') { this.url = url; this.demo = true; this.session = 'demo'; this.versionsList = []; }
   async load() { if (!this.snap) this.snap = await (await fetch(this.url)).json(); }
   setSession() {}
+  async authConfig() { return { mode: 'demo' }; }
   async login() { return { ok: true }; }
   async verify() { return { email: 'demo' }; }
   async listPlans() { return { plans: this.state ? [{ plan_id: 'demo', role: 'owner', version: this.state.version, name: this.state.profile.name }] : [] }; }
@@ -55,7 +63,7 @@ export class DemoApi {
     return { job_id: 'demo-job' };
   }
   async job() {
-    const labels = ['Читаю: отчёт 360', 'Читаю: заметки', 'Читаю: прошлый план', 'Читаю: описание должности', 'Ищу связи между документами', 'Собираю объяснения', 'Выбираю главное и что пока не трогать', 'Пишу направления и вопросы к встрече', 'Проверяю текст'];
+    const labels = ['Читаю: отчёт 360', 'Читаю: заметки', 'Читаю: прошлый план', 'Читаю: описание должности', 'Ищу связи между документами и собираю объяснения', 'Выбираю главное и что пока не трогать', 'Пишу направления и вопросы к встрече', 'Проверяю текст'];
     const i = Math.floor((Date.now() - this.jobStart) / 550);
     if (i >= labels.length) {
       if (!this.state) this.commit(clone(this.snap.base), 'первый черновик');

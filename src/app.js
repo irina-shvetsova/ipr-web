@@ -81,7 +81,11 @@ function startHTML() {
   }
   $('#scard').className = 'scard';
   if (!api.session) {
+    if (U.auth?.mode === 'guest') {
+      return '<div class="sblock"><h3>Вход для пилота</h3><p class="sh2">Введи код доступа, который тебе дали. Почта не нужна.</p><div class="field2"><label for="code">Код доступа</label><input id="code" type="text" autocomplete="off"></div><button class="btn wide" data-guest="1">Войти</button><p class="hintline">Планы сохраняются в этом браузере. В другом браузере или в режиме инкогнито их видно не будет.</p></div>';
+    }
     if (U.loginSent) {
+      if (U.loginSent.manual) return `<div class="sblock"><h3>Вход для пилота</h3><p class="sh2">Почта пока не подключена, поэтому ссылка для входа показана здесь. Она действует 20 минут.</p><p><a class="btn" href="${esc(U.loginSent.dev_link)}">Войти как ${esc(U.loginSent.email)}</a></p><button class="link" data-relogin="1">Другой адрес</button></div>`;
       return `<div class="sblock"><h3>Проверь почту</h3><p class="sh2">Ссылка для входа отправлена на ${esc(U.loginSent.email)}. Она действует 20 минут.</p>${U.loginSent.dev_link ? `<p><a class="btn" href="${esc(U.loginSent.dev_link)}">Войти (ссылка для разработки)</a></p>` : ''}<button class="link" data-relogin="1">Другой адрес</button></div>`;
     }
     return '<div class="sblock"><h3>Вход по ссылке на почту</h3><p class="sh2">Пароль не нужен: пришлём ссылку для входа.</p><div class="field2"><label for="email">Рабочая почта</label><input id="email" type="email" autocomplete="email" placeholder="name@company.ru"></div><button class="btn wide" data-login="1">Получить ссылку</button></div>';
@@ -298,7 +302,7 @@ function renderFinal() {
   const P = U.plan.selected;
   const A = U.plan.hypotheses.filter(h => !h.rejected);
   $('#fside').innerHTML = `<div class="fcard"><h3>Готово к встрече</h3><p class="ok">${allDone() ? 'Все вопросы уточнены' : 'Есть неподтверждённые ответы'}</p><p>${P.length} ${plural(P.length, 'направление', 'направления', 'направлений')}, ${A.length} ${plural(A.length, 'объяснение', 'объяснения', 'объяснений')}, ${Q.length} ${plural(Q.length, 'вопрос', 'вопроса', 'вопросов')} к руководителю.</p></div>`
-    + `<div class="fcard"><h3>Отправить руководителю</h3><p class="later">Руководитель получит ссылку и увидит версию без скрытой цели, твоих заметок и отклонённых объяснений.</p><div class="field2"><input id="mgrEmail" type="email" placeholder="почта руководителя"></div><button class="btn wide" data-sendmgr="1">Отправить черновик</button><p style="margin:8px 0 0"><button class="link" data-mview="1">${U.mview ? 'Вернуться к своей версии' : 'Сначала посмотреть глазами руководителя'}</button></p></div>`
+    + `<div class="fcard"><h3>Отправить руководителю</h3><p class="later">Руководитель увидит версию без скрытой цели, твоих заметок и отклонённых объяснений.</p>${U.auth?.mode === 'guest' ? '<button class="btn wide" data-sendmgr="1">Получить ссылку для руководителя</button>' : '<div class="field2"><input id="mgrEmail" type="email" placeholder="почта руководителя"></div><button class="btn wide" data-sendmgr="1">Отправить черновик</button>'}${U.mgrLink ? `<div class="field2" style="margin-top:10px"><label for="mgrLink">Ссылка для руководителя</label><input id="mgrLink" type="text" readonly value="${esc(U.mgrLink)}" onclick="this.select()"><small>Скопируй и отправь руководителю. Ссылка действует 14 дней и показывает версию, отправленную последней.</small></div>` : ''}<p style="margin:8px 0 0"><button class="link" data-mview="1">${U.mview ? 'Вернуться к своей версии' : 'Сначала посмотреть глазами руководителя'}</button></p></div>`
     + '<div class="fcard"><h3>Как подготовиться</h3><ol><li>Прочитай «Главное» и раздел 2. Отметь объяснения, которые не про тебя.</li><li>Проверь, как план увидит руководитель, и отправь его за день до встречи.</li><li>На встрече пройдите по вопросам из раздела 6.</li><li>После встречи внеси договорённости и пересобери план.</li></ol></div>'
     + '<div class="fcard"><h3>Что-то не так?</h3><p>Ответы и объяснения можно поменять, план перестроится. Прошлые версии сохранены в истории.</p><button class="btn ghost wide" data-back="1">Вернуться к правкам</button></div>';
 }
@@ -482,6 +486,7 @@ document.addEventListener('click', async e => {
     if (el.closest('[data-home]')) { if (U.preview) { endPreview(); return; } if (!U.managerOnly) { U.screen = 'start'; render(); } return; }
     if (d.login) { const email = $('#email').value.trim(); U.loginSent = { email, ...(await api.login(email)) }; render(); return; }
     if (d.relogin) { U.loginSent = null; render(); return; }
+    if (d.guest) { await api.guest($('#code').value); await loadPlans(); render(); return; }
     if (d.addtask) { const v = cap($('#taskIn').value.trim()); if (v.length > 2 && !U.tasks.includes(v)) { U.tasks.push(v); render(); $('#taskIn').focus(); } return; }
     if (d.tk) { const i = U.tasks.indexOf(d.tk); if (i > -1) U.tasks.splice(i, 1); else U.tasks.push(d.tk); render(); return; }
     if (d.role) { U.role = U.role === d.role ? '' : d.role; render(); return; }
@@ -539,8 +544,13 @@ document.addEventListener('click', async e => {
     if (d.mview) { if (!U.mview) await loadManagerView(); U.mview = !U.mview; render(); return; }
     if (d.dl) { download(d.dl); return; }
     if (d.sendmgr) {
-      const email = $('#mgrEmail').value.trim();
+      const email = $('#mgrEmail')?.value.trim() || '';
       const r = await api.send(U.planId, email);
+      if (r.manual && r.dev_link) {
+        U.mgrLink = r.dev_link; renderFinal();
+        toast('Ссылка готова: скопируй её и отправь руководителю');
+        return;
+      }
       toast(r.demo ? 'В демо письмо не отправляется' : `Отправлено: ${email}`);
       if (r.dev_link) console.log('Ссылка руководителя (dev):', r.dev_link);
       return;
@@ -555,19 +565,27 @@ $('#file').addEventListener('change', e => { addFiles(e.target.files); e.target.
 
 // ---------------------------------------------------------------- запуск
 
+async function loadPlans() {
+  if (!api.session) return;
+  try { U.plans = (await api.listPlans()).plans; } catch (e) { if (e.status !== 401) toast(e.message); }
+}
 async function boot() {
+  if (!api.demo) { try { U.auth = await api.authConfig(); } catch { U.auth = { mode: 'email' }; } }
   const hash = new URLSearchParams(location.hash.slice(1));
   if (hash.get('login')) {
-    try { await api.verify(hash.get('login')); } catch (e) { toast(e.message); }
     const plan = hash.get('plan');
+    const own = api.session;
+    // ссылка руководителя открывается во временной сессии и не затирает свою сессию браузера
+    try { await api.verify(hash.get('login'), !plan); } catch (e) { toast(e.message); }
     history.replaceState(null, '', location.pathname);
-    if (plan && api.session) {
+    if (plan && api.session && api.session !== own) {
       try { U.planId = plan; U.managerOnly = true; await loadManagerView(); U.screen = 'final'; render(); return; } catch (e) { U.managerOnly = false; toast(e.message); }
     }
   }
-  if (api.session) {
-    try { U.plans = (await api.listPlans()).plans; } catch (e) { if (e.status !== 401) toast(e.message); }
+  if (!api.session && U.auth?.mode === 'guest' && !U.auth.code_required) {
+    try { await api.guest(''); } catch (e) { toast(e.message); }
   }
+  await loadPlans();
   render();
 }
 window.addEventListener('hashchange', () => { if (location.hash.includes('login=')) boot(); });
