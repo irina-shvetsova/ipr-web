@@ -303,7 +303,9 @@ function bandHTML() {
   return `<div class="band"><span class="bl">Черновик</span><span class="bt">Это ещё не план. Ответь на ${left} ${plural(left, 'вопрос', 'вопроса', 'вопросов')} слева, и он перестроится под тебя.${chg}</span>${tools}<span class="dots">${questions().map(k => `<i class="${confirmed().includes(k) ? 'on' : ''}"></i>`).join('')}</span></div>`;
 }
 function renderDoc() {
-  $('#paper').innerHTML = bandHTML() + buildDiagHTML() + planHTML(U.plan, { mode: 'draft', flash: U.flash, wmOpen: U.wmOpen });
+  // Каждая часть рисуется отдельно: сбой в одной не оставляет экран пустым и показывает причину
+  const part = (name, fn) => { try { return fn(); } catch (e) { console.error(name, e); return `<div class="bdiag" open><p><b>Не удалось отрисовать: ${esc(name)}.</b> Пришли этот текст: ${esc(e?.message)} ${esc(String(e?.stack || '').split('\n').slice(1, 3).join(' '))}</p></div>`; } };
+  $('#paper').innerHTML = part('полоса состояния', bandHTML) + part('диагностика сборки', buildDiagHTML) + part('план', () => planHTML(U.plan, { mode: 'draft', flash: U.flash, wmOpen: U.wmOpen }));
   setTimeout(() => { U.flash = {}; }, 60);
 }
 

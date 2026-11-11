@@ -1,9 +1,9 @@
 // Рендер плана из PlanState. Только отображение: всё, что считается, приходит из шлюза.
 
 export const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-export const low = s => (s ? s.charAt(0).toLowerCase() + s.slice(1) : '');
-export const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
-export const listRu = a => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' и ' + a[a.length - 1]);
+export const low = s => { s = s == null ? '' : String(s); return s ? s.charAt(0).toLowerCase() + s.slice(1) : ''; };
+export const cap = s => { s = s == null ? '' : String(s); return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; };
+export const listRu = (a = []) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' и ' + a[a.length - 1]);
 export function plural(n, a, b, c) { const m = n % 10, h = n % 100; if (m === 1 && h !== 11) return a; if (m >= 2 && m <= 4 && (h < 12 || h > 14)) return b; return c; }
 
 export const TYPE_LABEL = { '360': 'Отчёт 360', ipr: 'Прошлый ИПР', notes: 'Заметки', delta: 'Delta', job: 'Описание должности', competency_model: 'Модель компетенций', self_assessment: 'Самооценка', other: 'Документ' };
@@ -42,8 +42,8 @@ export function goalShort(g) {
 }
 
 function srcLabel(s, factId) {
-  const m = s.materials.find(x => x.id === docOf(factId));
-  const f = s.facts.find(x => x.id === factId);
+  const m = (s.materials || []).find(x => x.id === docOf(factId));
+  const f = (s.facts || []).find(x => x.id === factId);
   const label = m ? TYPE_LABEL[m.type] || 'Документ' : 'Документ';
   const cls = f?.kind === 'self_note' || (m && ['notes', 'self_assessment'].includes(m.type)) ? 'self' : (m?.type === '360' ? '' : 'doc');
   return { label, cls };
@@ -105,7 +105,7 @@ function whyBlock(s, h, o) {
       + `<label class="check"><input type="checkbox" data-rejmeet="${h.id}"${h.discuss_at_meeting ? ' checked' : ''}><span>Обсудить с руководителем<small>Добавим вопрос в раздел 6. Без отметки руководитель этот отказ не увидит.</small></span></label>`
       + `<button class="link" data-unrej="${h.id}">Вернуть</button></div></div>`;
   }
-  const sup = h.supports.map(p => { const l = srcLabel(s, p.fact_id); return `<li><span class="src ${l.cls}">${esc(l.label)}</span>${esc(p.text)}</li>`; }).join('');
+  const sup = (h.supports || []).map(p => { const l = srcLabel(s, p.fact_id); return `<li><span class="src ${l.cls}">${esc(l.label)}</span>${esc(p.text)}</li>`; }).join('');
   let x = `<div class="why-blk"><div class="wt">Почему так может быть · ${esc(HTYPE[h.type] || '')}</div><div class="hf">${esc(h.statement)}</div>`
     + `<div class="hrow det"><b>Опоры</b><ul class="sup">${sup}${h.supports_hidden ? `<li class="later">Ещё ${h.supports_hidden} из личных заметок сотрудника скрыты.</li>` : ''}</ul></div>`
     + `<div class="hrow det"><b>Другое объяснение</b><span>${esc(h.alternative)}</span></div>`
@@ -151,12 +151,12 @@ function stepLi(s, d, st, k, o) {
 function directionsHTML(s, o) {
   const { ref } = zoneNumbers(s);
   const draft = o.mode === 'draft';
-  const P = s.selected.filter(id => dir(s, id));
+  const P = (s.selected || []).filter(id => dir(s, id));
   let x = `<p>${P.length === 1 ? 'Одно направление' : P.length === 2 ? 'Два направления' : 'Три направления'} на год, шаги расписаны на ближайший квартал. Больше трёх навыков за квартал не берём.</p>`;
   P.forEach((id, i) => {
     const d = dir(s, id);
-    const steps = d.steps.map((st, k) => ({ st, k })).filter(({ st }) => !st.removed);
-    const removed = d.steps.length - steps.length;
+    const steps = (d.steps || []).map((st, k) => ({ st, k })).filter(({ st }) => !st.removed);
+    const removed = (d.steps || []).length - steps.length;
     x += `<div class="${fl(o.flash, 'dir_' + id)}" id="dir_${id}"><div class="dirhead"><h3>3.${i + 1} ${esc(d.title)}</h3>${i === 0 && P.length > 1 ? '<span class="dirtag">Главное</span>' : ''}</div>`;
     x += '<table class="kv">'
       + `<tr><th>Навык</th><td>${esc(d.skill_label)}</td></tr>`
@@ -170,7 +170,7 @@ function directionsHTML(s, o) {
       + (draft ? `<div class="addtask own"><input type="text" data-ownin="${id}" aria-label="Своё действие" placeholder="Своё действие, например: обсудить формат отчёта в декабре"><button class="btn ghost sm" data-ownadd="${id}">Добавить</button></div>` : '')
       + '</td></tr>'
       + `<tr class="det"><th>Выход из зоны комфорта</th><td>${esc(d.comfort)}</td></tr>`
-      + `<tr><th>Критерии достижения</th><td><ul>${d.criteria.map(c => `<li>${esc(c)}</li>`).join('')}</ul></td></tr>`
+      + `<tr><th>Критерии достижения</th><td><ul>${(d.criteria || []).map(c => `<li>${esc(c)}</li>`).join('')}</ul></td></tr>`
       + `<tr><th>Риски и поддержка</th><td class="rk"><p><b>Риск:</b> ${esc(d.risk)}</p><p><b>Управление:</b> ${esc(d.control)}</p><p><b>Поддержка:</b> ${esc(d.if_rollback)}</p></td></tr>`
       + '</table>';
     if (draft) {
@@ -191,7 +191,7 @@ function directionsHTML(s, o) {
 
 export function planHTML(s, o = {}) {
   const draft = o.mode === 'draft';
-  const P = s.selected.filter(id => dir(s, id));
+  const P = (s.selected || []).filter(id => dir(s, id));
   const main = dir(s, P[0]);
   const g = s.answers.goal || {};
   const materials = s.materials || [];
@@ -209,7 +209,7 @@ export function planHTML(s, o = {}) {
   // 1. Контекст
   const strengths = strengthsOf(s);
   x += `<h2 id="s1"><span class="sn">01</span>Контекст развития</h2><div class="${fl(o.flash, 'ctx')}">`;
-  x += `<p>${s.tasks.length ? `В этом квартале у тебя ${esc(listRu(s.tasks.map(t => low(t.title))))}. ` : ''}План строится вокруг того, что сейчас важнее всего для работы.</p>`;
+  x += `<p>${(s.tasks || []).length ? `В этом квартале у тебя ${esc(listRu(s.tasks.map(t => low(t.title))))}. ` : ''}План строится вокруг того, что сейчас важнее всего для работы.</p>`;
   if (strengths.length) {
     const peers = strengths.filter(l => l.level !== 'self'), self = strengths.filter(l => l.level === 'self');
     const li = l => `<li><span class="sc">${esc(l.topic)}.</span> ${esc(l.summary)}</li>`;
@@ -223,12 +223,12 @@ export function planHTML(s, o = {}) {
   x += `<table class="kv">${goalRow}${s.manager_inputs?.expectations ? `<tr><th>Ожидания руководителя</th><td>${esc(s.manager_inputs.expectations)} <span class="owntag">вводные руководителя</span></td></tr>` : ''}`
     + `<tr><th>Навыки в плане</th><td>${esc(cap(listRu(P.map(id => low(dir(s, id).skill_label)))))}</td></tr>`
     + (main ? `<tr><th>Ключевой сдвиг</th><td>${esc(main.shift)}</td></tr>` : '') + '</table>';
-  const prev = s.facts.filter(f => f.kind === 'prev_goal');
+  const prev = (s.facts || []).filter(f => f.kind === 'prev_goal');
   if (prev.length) {
     x += `<h4>Прошлый план</h4>${s.answers.role_changed ? '<p class="later">Роль сменилась: прошлый план учтён как контекст, без итогов.</p>' : ''}<table class="kv">`
       + prev.map(f => { const st = s.answers.prev?.[f.id] || f.status; return `<tr><th>${esc(f.source_label || f.behavior)}</th><td>${esc(PREV_ST.find(p => p.id === st)?.t || 'Итог не отмечен')}</td></tr>`; }).join('') + '</table>';
   }
-  x += '<div class="basis det"><b>На чём построен план</b><ul>' + materials.map(m => `<li>${esc(m.file_name || TYPE_LABEL[m.type])}: ${m.status === 'unreadable' ? `<span class="later">${esc(m.status_reason || 'не удалось прочитать')}</span>` : esc(`${low(TYPE_LABEL[m.type] || 'документ')}${m.period ? ', ' + m.period : ''}${m.scale ? ', шкала ' + m.scale : ''}`)}</li>`).join('') + '</ul></div></div>';
+  x += '<div class="basis det"><b>На чём построен план</b><ul>' + materials.map(m => `<li>${esc(m.file_name || TYPE_LABEL[m.type])}: ${m.status === 'unreadable' ? `<span class="later">${esc(m.status_reason || 'не удалось прочитать')}</span>` : esc(`${low(TYPE_LABEL[m.type] || 'документ')}${m.period && typeof m.period !== 'object' ? ', ' + m.period : ''}${m.scale && typeof m.scale !== 'object' ? ', шкала ' + m.scale : ''}`)}</li>`).join('') + '</ul></div></div>';
 
   // 2. Зоны роста
   x += `<h2 id="s2"><span class="sn">02</span>Зоны роста и почему так</h2><div class="${fl(o.flash, 'hyp')}">${zonesHTML(s, o)}</div>`;
