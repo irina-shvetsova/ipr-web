@@ -513,3 +513,10 @@ table.ptab td:first-child{width:42%}
 /* панель «Как пользоваться» */
 .histp.help li{align-items:flex-start}
 .histp.help .vn{padding-top:2px}
+
+/* диагностика сборки (пилот) */
+.bdiag{margin:0 0 18px;padding:10px 14px;border:1px dashed var(--line,#d8d8d2);border-radius:8px;font-size:13px;color:var(--muted,#6b6b66)}
+.bdiag summary{cursor:pointer;font-weight:600}
+.bdiag ul{margin:6px 0 0;padding-left:18px}
+.bdiag li{margin:4px 0;word-break:break-word}
+.bdiag p{margin:6px 0 0}
