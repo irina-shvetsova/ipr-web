@@ -59,6 +59,10 @@ function zoneNumbers(s) {
   return { order, ref };
 }
 
+/** Сильные стороны: с шлюза приходят готовыми (s.strengths), в демо-снимках берём из связей */
+export const strengthsOf = s => s.strengths || (s.links || []).filter(l => l.polarity === 'strength').map(l => ({ id: l.id, topic: l.topic, summary: l.summary, level: 'peers' }));
+const SELF_NOTE = 'По твоим словам и документам, оценкой коллег пока не подтверждено.';
+
 // ---------------------------------------------------------------- «Главное»
 
 function mainHTML(s, o) {
@@ -71,13 +75,19 @@ function mainHTML(s, o) {
   const why = rk?.reasons?.length ? cap(rk.reasons.join('; ')) + '.' : 'Выбрано по задачам квартала и твоим ответам.';
   const notNow = (s.ranking || []).filter(r => !s.selected.includes(r.hypothesis_id)).slice(0, 3)
     .map(r => `<li><b>${esc(hyp(s, r.hypothesis_id)?.topic)}:</b> ${esc((s.deferred || []).includes(r.hypothesis_id) ? 'перенесено на следующий квартал.' : 'в этот квартал не помещается, вернёмся при пересборке.')}</li>`).join('');
-  const strengths = s.links.filter(l => l.polarity === 'strength');
+  const strengths = strengthsOf(s);
+  const selfS = strengths.filter(x => x.level === 'self');
+  const strengthText = d.strength_basis
+    || (selfS.length ? `Опирайся на то, что уже получается: ${listRu(selfS.map(x => low(x.topic)))}. ${SELF_NOTE}`
+      : o.manager ? 'Сильные стороны в плане пока не указаны.'
+        : s.ask_strengths ? 'Ответь на вопрос «Что у тебя получается лучше всего?» слева: на это будет опираться план.'
+          : 'Сильные стороны появятся, когда в материалах будет оценка окружения.');
   let x = `<div class="${fl(o.flash, 'main', 'mainbox')}" id="main"><div class="kick2">Главное в плане<span>С чего начать в этом квартале и почему</span></div>`;
   x += `<div class="mb-t">${esc(d.title)}</div>`;
   x += `<p class="mb-why"><b>Почему с этого.</b> ${esc(why)} Объяснение и опоры в пункте ${ref[mid]}.</p>`;
   if (s.answers.time === '0') x += '<p class="light-note">Сейчас не до развития, и план это учитывает: в этом квартале один шаг в спокойном темпе.</p>';
   x += `<div class="quad"><div><div class="qh2">Что это даст в задачах квартала</div>${esc(d.goal)}</div>`
-    + `<div><div class="qh2">Как: через сильную сторону</div>${esc(d.strength_basis || 'Сильные стороны появятся, когда в материалах будет оценка окружения.')}</div>`
+    + `<div><div class="qh2">Как: через сильную сторону</div>${esc(strengthText)}</div>`
     + `<div><div class="qh2">Что пока не трогать</div><ul class="notnow">${notNow}${strengths.length ? `<li><b>Сильные стороны:</b> ${esc(listRu(strengths.map(l => low(l.topic))))}. Развивать отдельно не нужно, на них опираемся.</li>` : ''}</ul></div>`
     + `<div><div class="qh2">Если ничего не менять</div>${esc(d.cost_if_nothing)}</div></div>`;
   return x + '</div>';
@@ -197,10 +207,16 @@ export function planHTML(s, o = {}) {
     + '<p>План принадлежит тебе: его задача поддержать твою работу, а не оценить тебя. Развитие идёт неровно, откаты нормальны.</p></details>';
 
   // 1. Контекст
-  const strengths = s.links.filter(l => l.polarity === 'strength');
+  const strengths = strengthsOf(s);
   x += `<h2 id="s1"><span class="sn">01</span>Контекст развития</h2><div class="${fl(o.flash, 'ctx')}">`;
   x += `<p>${s.tasks.length ? `В этом квартале у тебя ${esc(listRu(s.tasks.map(t => low(t.title))))}. ` : ''}План строится вокруг того, что сейчас важнее всего для работы.</p>`;
-  if (strengths.length) x += '<h4>Сильные стороны, на которые опирается план</h4><ul>' + strengths.map(l => `<li><span class="sc">${esc(l.topic)}.</span> ${esc(l.summary)}</li>`).join('') + '</ul>';
+  if (strengths.length) {
+    const peers = strengths.filter(l => l.level !== 'self'), self = strengths.filter(l => l.level === 'self');
+    const li = l => `<li><span class="sc">${esc(l.topic)}.</span> ${esc(l.summary)}</li>`;
+    x += '<h4>Сильные стороны, на которые опирается план</h4>';
+    if (peers.length) x += `${self.length ? '<p class="sh2">По оценкам коллег</p>' : ''}<ul>${peers.map(li).join('')}</ul>`;
+    if (self.length) x += `<p class="sh2">${SELF_NOTE}</p><ul>${self.map(li).join('')}</ul>`;
+  }
   const goalRow = g.type === 'own' && g.hidden
     ? (o.manager ? '' : `<tr><th>Твои ожидания</th><td>${esc(g.text || 'Цель не записана')} <span class="owntag">руководитель не увидит</span></td></tr>`)
     : `<tr><th>Твои ожидания</th><td>${esc(goalShort(g))}</td></tr>`;

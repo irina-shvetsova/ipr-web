@@ -29,11 +29,13 @@ const confirmed = () => U.plan?.answers?.confirmed || [];
 function questions() {
   const q = [];
   if (U.plan?.facts?.some(f => f.kind === 'prev_goal')) q.push('prev');
-  q.push('tasks', 'time', 'goal', 'prio');
+  q.push('tasks');
+  if (U.plan?.ask_strengths) q.push('strengths');
+  q.push('time', 'goal', 'prio');
   return q;
 }
 const allDone = () => questions().every(k => confirmed().includes(k));
-const QT = { prev: 'Как прошёл прошлый план?', tasks: 'Задачи квартала верны?', time: 'Сколько времени в неделю на развитие?', goal: 'Куда хочешь расти?', prio: 'С чего начать?' };
+const QT = { prev: 'Как прошёл прошлый план?', tasks: 'Задачи квартала верны?', time: 'Сколько времени в неделю на развитие?', goal: 'Куда хочешь расти?', prio: 'С чего начать?', strengths: 'Что у тебя получается лучше всего?' };
 
 async function change(ops, label) {
   if (U.busy) return;
@@ -111,6 +113,7 @@ function startHTML() {
   h += `<div class="field2"><label for="meRole">Роль</label><input id="meRole" type="text" placeholder="Например: руководитель группы аналитики или эксперт" value="${esc(U.role)}"><div class="rolechips">${ROLES.map(r => `<button class="chip${U.role === r ? ' on' : ''}" data-role="${esc(r)}" type="button">${esc(r)}</button>`).join('')}</div></div>`;
   h += `<div class="field2"><label>Какие задачи у тебя в этом квартале</label>${tasksHTML()}</div>`;
   h += `<div class="field2"><label for="story">Что сейчас забирает больше всего времени</label><textarea id="story" rows="2" placeholder="Например: недельный отчёт собираю без команды, потому что так быстрее">${esc(U.story)}</textarea><small>Из этого ответа строится объяснение того, куда на самом деле уходит время.</small></div></div>`;
+  if (U.buildError) h += `<div class="bdiag" style="border-color:#c0392b;color:#8a2b20"><b>${esc(U.buildError.text)}</b>${U.buildError.detail ? `<p>Подробности: ${esc(U.buildError.detail)}</p>` : ''}</div>`;
   h += `<div class="basis" id="basis">${basisInner()}</div>`;
   h += `<button class="btn wide" data-start="1" type="button"${canBuild() ? '' : ' disabled'}>Собрать черновик</button>`;
   h += `<p class="demoline">Заполнить примером: <button class="link" data-demo="lead" type="button">руководитель группы</button>${api.demo ? '' : '<button class="link" data-demo="spec" type="button">ведущий аналитик</button>'}</p>`;
@@ -173,6 +176,7 @@ function current(k) {
   if (k === 'time') return a.time;
   if (k === 'goal') return { ...a.goal };
   if (k === 'prio') return a.prio?.touched ? [...a.prio.selected] : [...U.plan.selected];
+  if (k === 'strengths') return { selected: [...(a.strengths?.selected || [])], own: [...(a.strengths?.own || [])] };
   if (k === 'prev') return { st: { ...Object.fromEntries(U.plan.facts.filter(f => f.kind === 'prev_goal').map(f => [f.id, a.prev?.[f.id] || f.status])) }, rc: !!a.role_changed };
   return null;
 }
@@ -182,6 +186,7 @@ function qSummary(k) {
   if (k === 'time') { const t = TIME.find(x => x.id === pend('time')); return t.id === '0' ? t.t : `${t.t} в неделю`; }
   if (k === 'goal') return goalShort(pend('goal'));
   if (k === 'prio') return pend('prio').map(id => hyp(U.plan, id)?.topic).filter(Boolean).join(', ');
+  if (k === 'strengths') { const p = pend('strengths'); const t = [...(U.plan.strength_candidates || []).filter(c => p.selected.includes(c.id)).map(c => c.topic), ...p.own]; return t.length ? t.join(', ') : 'Пока не отмечено'; }
   return '';
 }
 function okBtn(k, dis) {
@@ -217,6 +222,16 @@ function qBody(k) {
     h += '<div class="opts">' + GOALS.map(x => `<button class="opt${g.type === x.id ? ' on' : ''}" data-goal="${x.id}" aria-pressed="${g.type === x.id}"><b>${esc(x.t)}</b><small>${esc(x.d)}</small></button>`).join('') + '</div>';
     if (g.type === 'own') h += `<div class="goalbox"><input type="text" id="goalText" aria-label="Твоя цель" placeholder="Например: руководить отделом аналитики" value="${esc(g.text || '')}"><label class="check"><input type="checkbox" id="goalHide"${g.hidden ? ' checked' : ''}><span>Не показывать руководителю<small>Цель учтём в плане, но в версии для руководителя её не будет.</small></span></label></div>`;
     return h + okBtn(k, g.type === 'own' && !(g.text || '').trim());
+  }
+  if (k === 'strengths') {
+    const p = pend('strengths');
+    const cands = U.plan.strength_candidates || [];
+    h += '<p class="qhint">В материалах нет оценки коллег, поэтому сильные стороны отмечаешь ты. План будет на них опираться. В документе будет подпись, что это твои слова.</p>';
+    if (cands.length) h += '<div class="plist">' + cands.map(c => { const on = p.selected.includes(c.id); return `<button class="popt${on ? ' on' : ''}" data-str="${esc(c.id)}" aria-pressed="${on}"><span class="pbox">${on ? '✓' : ''}</span><span class="pt"><b>${esc(c.topic)}</b><small>${esc(c.summary)}</small></span></button>`; }).join('') + '</div>';
+    else h += '<p class="qhint">В документах подходящих примеров не нашлось. Впиши своими словами.</p>';
+    if (p.own.length) h += '<ul class="vlist">' + p.own.map((t, i) => `<li>${esc(t)} <button class="link" data-rmstr="${i}">убрать</button></li>`).join('') + '</ul>';
+    if (p.own.length < 3) h += '<div class="addtask"><input id="strIn" type="text" aria-label="Своя сильная сторона" placeholder="Своё, например: быстро разбираюсь в новых данных"><button class="btn ghost" data-addstr="1" type="button">Добавить</button></div>';
+    return h + okBtn(k);
   }
   if (k === 'prio') {
     const P = pend('prio');
@@ -390,7 +405,7 @@ async function poll(jobId) {
     U.job = job;
     if (U.screen === 'build') $('#scard').innerHTML = startHTML();
     if (job.status === 'done') break;
-    if (job.status === 'failed') { toast(job.error || 'Не получилось собрать черновик'); U.screen = 'start'; render(); return; }
+    if (job.status === 'failed') { U.buildError = { text: job.error || 'Не получилось собрать черновик', detail: job.detail || '' }; U.screen = 'start'; render(); return; }
     await new Promise(r => setTimeout(r, 900));
   }
   await openPlan(U.planId);
@@ -408,6 +423,7 @@ async function confirmQ(k) {
   if (k === 'time') ops.push({ op: 'set_answer', key: 'time', value: pend('time') });
   if (k === 'goal') ops.push({ op: 'set_answer', key: 'goal', value: pend('goal') });
   if (k === 'prio') ops.push({ op: 'set_answer', key: 'prio', value: { selected: pend('prio') } });
+  if (k === 'strengths') ops.push({ op: 'set_answer', key: 'strengths', value: pend('strengths') });
   if (k === 'tasks') ops.push({ op: 'set_answer', key: 'tasks_confirmed', value: true });
   if (k === 'prev') { const p = pend('prev'); ops.push({ op: 'set_answer', key: 'prev', value: p.st }, { op: 'set_answer', key: 'role_changed', value: p.rc }); }
   ops.push({ op: 'set_answer', key: 'confirmed', value: [...new Set([...confirmed(), k])] });
@@ -527,7 +543,8 @@ document.addEventListener('click', async e => {
       U.files = U.files.filter(x => x.demoIndex === undefined && !x.demoBad);
       render(); return;
     }
-    if (d.start) { el.disabled = true; await startBuild(); return; }
+    if (d.start) {
+      U.buildError = null; el.disabled = true; await startBuild(); return; }
     if (d.openplan) { await openPlan(d.openplan); return; }
     if (d.openmgr) { U.planId = d.openmgr; U.managerOnly = true; await loadManagerView(); U.screen = 'final'; render(); return; }
     if (d.tab) { U.tab = d.tab; renderSide(); return; }
@@ -535,6 +552,9 @@ document.addEventListener('click', async e => {
     if (d.next) { await confirmQ(d.next); return; }
     if (d.time) { U.pend.time = d.time; renderSide(); return; }
     if (d.goal) { U.pend.goal = { ...pend('goal'), type: d.goal }; renderSide(); return; }
+    if (d.str) { const p = pend('strengths'); const i = p.selected.indexOf(d.str); if (i > -1) p.selected.splice(i, 1); else p.selected.push(d.str); U.pend.strengths = p; renderSide(); return; }
+    if (d.addstr) { const v = cap(($('#strIn')?.value || '').trim()); const p = pend('strengths'); if (v.length > 2 && p.own.length < 3 && !p.own.includes(v)) { p.own.push(v); U.pend.strengths = p; renderSide(); $('#strIn')?.focus(); } return; }
+    if (d.rmstr) { const p = pend('strengths'); p.own.splice(+d.rmstr, 1); U.pend.strengths = p; renderSide(); return; }
     if (d.prio) { const P = pend('prio').slice(); const i = P.indexOf(d.prio); if (i > -1) { if (P.length === 1) { toast('Нужно хотя бы одно направление'); return; } P.splice(i, 1); } else if (P.length < 3) P.push(d.prio); U.pend.prio = P; renderSide(); return; }
     if (d.pst) { const [fid, st] = d.pst.split('|'); const p = pend('prev'); U.pend.prev = { ...p, st: { ...p.st, [fid]: st } }; renderSide(); return; }
     if (d.goq) { document.querySelector('.side').scrollIntoView({ behavior: 'smooth' }); return; }
