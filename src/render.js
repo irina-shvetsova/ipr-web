@@ -199,7 +199,7 @@ export function planHTML(s, o = {}) {
   let x = `<div class="ipr${draft ? ' draft' : ''}${s.compact ? ' compact' : ''}">`;
   x += `<div class="kick"><span>Индивидуальный план развития</span><span${draft ? ' style="color:var(--lt)"' : ''}>${draft ? 'Черновик' : o.manager ? 'Версия для руководителя' : 'Конфиденциально'}</span></div><h1>${esc(s.profile.name || 'Сотрудник')}</h1>`;
   x += `<p class="sub">${esc(s.profile.role)} · период: год, шаги расписаны на ${esc(listRu(s.quarter.months.map(low)))}</p>`;
-  x += `<p class="sub">Собран из: ${esc(listRu(readable.map(m => low(TYPE_LABEL[m.type] || 'документ'))) || 'рассказа о работе')}</p><div class="conf">Конфиденциальный документ</div>`;
+  x += `<p class="sub">Собран из: ${esc(listRu([...new Set(readable.map(m => low(TYPE_LABEL[m.type] || 'документ')))]) || 'рассказа о работе')}</p><div class="conf">Конфиденциальный документ</div>`;
   x += mainHTML(s, o);
   if (draft) x += '<div class="toc"><a href="#s1"><span>01</span>Контекст</a><a href="#s2"><span>02</span>Зоны роста</a><a href="#s3"><span>03</span>Направления</a><a href="#s4"><span>04</span>Обучение</a><a href="#s5"><span>05</span>Точки контроля</a><a href="#s6"><span>06</span>Согласование</a></div>';
   x += `<details class="about det"${draft ? '' : ' open'}><summary>О плане и как его читать</summary>`
