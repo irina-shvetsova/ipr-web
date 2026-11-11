@@ -267,6 +267,19 @@ function renderSide() {
   const gt = $('#goalText'); if (gt) gt.addEventListener('input', () => { U.pend.goal = { ...pend('goal'), text: gt.value }; const b = document.querySelector('[data-next="goal"]'); if (b) b.disabled = !gt.value.trim(); });
   const gh = $('#goalHide'); if (gh) gh.addEventListener('change', () => { U.pend.goal = { ...pend('goal'), hidden: gh.checked }; });
 }
+// Диагностика сборки для пилота: сколько чего получилось и какие шаги дали ошибку
+function buildDiagHTML() {
+  const p = U.plan;
+  const probs = Object.entries(p.build_problems || {}).filter(([, v]) => v && v.length);
+  const mats = p.materials || [];
+  const read = mats.filter(m => m.readable !== false && m.status !== 'unreadable').length;
+  const counts = `Документов: ${mats.length}, прочитано: ${read}. Фактов: ${(p.facts || []).length}. Связей: ${(p.links || []).length}. Объяснений: ${(p.hypotheses || []).length}. Догадок: ${(p.guesses || []).length}. Направлений: ${(p.directions || []).length}.`;
+  const list = probs.length
+    ? `<ul>${probs.map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v.slice(0, 4).join('; ').slice(0, 600))}</li>`).join('')}</ul>`
+    : '<p>Ошибок на шагах сборки нет.</p>';
+  return `<details class="bdiag"${probs.length ? ' open' : ''}><summary>Диагностика сборки${probs.length ? ` · шагов с ошибками: ${probs.length}` : ''}</summary><p>${esc(counts)}</p>${list}</details>`;
+}
+
 function bandHTML() {
   const chg = U.changes.length ? `<small>Только что обновлено: ${U.changes.map(c => `<button data-jump="${esc(c.anchor)}">${esc(c.text)}</button>`).join(', ')}</small>` : '';
   const tools = `<span class="btools"><button data-compact="1">${U.plan.compact ? 'Подробнее' : 'Короче'}</button><button data-hist="1">История версий · ${U.plan.version}</button><button data-dl="docx">Скачать черновик</button></span>`;
@@ -275,7 +288,7 @@ function bandHTML() {
   return `<div class="band"><span class="bl">Черновик</span><span class="bt">Это ещё не план. Ответь на ${left} ${plural(left, 'вопрос', 'вопроса', 'вопросов')} слева, и он перестроится под тебя.${chg}</span>${tools}<span class="dots">${questions().map(k => `<i class="${confirmed().includes(k) ? 'on' : ''}"></i>`).join('')}</span></div>`;
 }
 function renderDoc() {
-  $('#paper').innerHTML = bandHTML() + planHTML(U.plan, { mode: 'draft', flash: U.flash, wmOpen: U.wmOpen });
+  $('#paper').innerHTML = bandHTML() + buildDiagHTML() + planHTML(U.plan, { mode: 'draft', flash: U.flash, wmOpen: U.wmOpen });
   setTimeout(() => { U.flash = {}; }, 60);
 }
 
