@@ -105,7 +105,14 @@ function whyBlock(s, h, o) {
       + `<label class="check"><input type="checkbox" data-rejmeet="${h.id}"${h.discuss_at_meeting ? ' checked' : ''}><span>Обсудить с руководителем<small>Добавим вопрос в раздел 6. Без отметки руководитель этот отказ не увидит.</small></span></label>`
       + `<button class="link" data-unrej="${h.id}">Вернуть</button></div></div>`;
   }
-  const sup = (h.supports || []).map(p => { const l = srcLabel(s, p.fact_id); return `<li><span class="src ${l.cls}">${esc(l.label)}</span>${esc(p.text)}</li>`; }).join('');
+  const sup = (h.supports || []).map(p => {
+    const l = srcLabel(s, p.fact_id);
+    // Модель часто начинает опору с названия источника: «заметки: …». Подпись уже есть, повтор убираем
+    const lab = String(l.label || '').toLowerCase();
+    let t = String(p.text || '');
+    if (lab && t.toLowerCase().startsWith(lab)) t = cap(t.slice(lab.length).replace(/^[\s:,.–—-]+/, ''));
+    return `<li><span class="src ${l.cls}">${esc(l.label)}</span>${esc(t)}</li>`;
+  }).join('');
   let x = `<div class="why-blk"><div class="wt">Почему так может быть · ${esc(HTYPE[h.type] || '')}</div><div class="hf">${esc(h.statement)}</div>`
     + `<div class="hrow det"><b>Опоры</b><ul class="sup">${sup}${h.supports_hidden ? `<li class="later">Ещё ${h.supports_hidden} из личных заметок сотрудника скрыты.</li>` : ''}</ul></div>`
     + `<div class="hrow det"><b>Другое объяснение</b><span>${esc(h.alternative)}</span></div>`
