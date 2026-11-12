@@ -288,7 +288,7 @@ function buildDiagHTML() {
   const probs = Object.entries(p.build_problems || {}).filter(([, v]) => v && v.length);
   const mats = p.materials || [];
   const read = mats.filter(m => m.readable !== false && m.status !== 'unreadable').length;
-  const counts = `Документов: ${mats.length}, прочитано: ${read}. Фактов: ${(p.facts || []).length}. Связей: ${(p.links || []).length}. Объяснений: ${(p.hypotheses || []).length}. Догадок: ${(p.guesses || []).length}. Направлений: ${(p.directions || []).length}.`;
+  const counts = `Документов: ${mats.length}, прочитано: ${read}. Фактов: ${(p.facts || []).length}. Связей: ${(p.links || []).length}. Объяснений: ${(p.hypotheses || []).length}. Догадок: ${(p.guesses || []).length}. Направлений: ${(p.directions || []).length}.${p.build_fixed ? ` Поправлено в ответах моделей автоматически: ${p.build_fixed}.` : ''}`;
   const list = probs.length
     ? `<ul>${probs.map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v.slice(0, 4).join('; ').slice(0, 600))}</li>`).join('')}</ul>`
     : '<p>Ошибок на шагах сборки нет.</p>';
