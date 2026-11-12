@@ -520,3 +520,34 @@ table.ptab td:first-child{width:42%}
 .bdiag ul{margin:6px 0 0;padding-left:18px}
 .bdiag li{margin:4px 0;word-break:break-word}
 .bdiag p{margin:6px 0 0}
+
+/* ===== Спокойный документ ===== */
+/* Один акцент. Цвет остаётся у того, на что нажимают; подписи, источники и сроки серые, без заливок. */
+.ipr h2 .sn,.toc a span,.zhead .zn,.nums .o b{color:var(--muted)}
+.ipr h4,.why-blk .wt,.about summary,.mainbox .kick2,.quad .qh2{text-transform:none;letter-spacing:0;font-size:13px}
+.ipr h4,.why-blk .wt{color:var(--muted)}
+.why-blk{border-left-color:var(--line)}
+.mainbox .kick2{color:var(--on-dark2)}
+.quad{border-top:1px solid var(--line-dark)}
+.quad>div,.quad>div:nth-child(n){background:transparent;color:var(--on-dark);padding-left:60px}
+.quad>div:nth-child(even){border-left:1px solid var(--line-dark);padding-left:28px}
+.quad>div:nth-child(-n+2){border-bottom:1px solid var(--line-dark)}
+.quad .qh2{color:var(--on-dark2)}
+.fdoc .mainbox{background:var(--ink)}
+.src,.src.self,.src.doc{background:transparent;color:var(--muted);padding:0;margin-right:4px;font-size:13px}
+.src::after{content:":"}
+.when2{background:transparent;color:var(--muted);padding:0;min-width:70px;font-size:13.5px}
+.owntag{background:transparent;color:var(--muted);padding:0}
+.chk2{color:var(--muted)}
+.crit li b{color:var(--muted);text-transform:none;letter-spacing:0;font-size:13px}
+.dirtag{background:transparent;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line);text-transform:none;letter-spacing:0}
+.basis2{background:transparent;padding:12px 0 0;border-top:1px solid var(--line)}
+.meetbox{background:transparent;padding:14px 0 0;border-top:1px solid var(--ink)}
+.meetbox h4{color:var(--muted)}
+.dtypes span{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.rk b,.notnow b{font-weight:400;color:var(--muted)}
+/* Действия над шагом появляются при наведении на шаг */
+.wact{opacity:0;transition:opacity .15s}
+li:hover>.wact,.wact:focus-within{opacity:1}
+@media (hover:none){.wact{opacity:1}}
+.basis{background:transparent;border-left:0;border-top:1px solid var(--line);padding:12px 0 0}
