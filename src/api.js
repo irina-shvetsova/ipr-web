@@ -40,6 +40,12 @@ export class HttpApi {
   versions(planId) { return this.req('GET', `/plans/${planId}/versions`); }
   restore(planId, v) { return this.req('POST', `/plans/${planId}/versions/${v}/restore`); }
   send(planId, email) { return this.req('POST', `/plans/${planId}/send`, { manager_email: email }); }
+  /** Событие в журнал: не ждёт ответа и никогда не бросает ошибку */
+  clientLog(kind, data = {}) {
+    try {
+      fetch(this.base + '/client-log', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', ...(this.session ? { Authorization: `Bearer ${this.session}` } : {}) }, body: JSON.stringify({ kind, ...data }) }).catch(() => {});
+    } catch { /* журнал не должен мешать работе */ }
+  }
 }
 
 /** Демо без шлюза: снимки, посчитанные движком правил заранее (demo/plan_demo.json) */
@@ -48,6 +54,7 @@ export class DemoApi {
   async load() { if (!this.snap) this.snap = await (await fetch(this.url)).json(); }
   setSession() {}
   async authConfig() { return { mode: 'demo' }; }
+  clientLog() {}
   async login() { return { ok: true }; }
   async verify() { return { email: 'demo' }; }
   async listPlans() { return { plans: this.state ? [{ plan_id: 'demo', role: 'owner', version: this.state.version, name: this.state.profile.name }] : [] }; }

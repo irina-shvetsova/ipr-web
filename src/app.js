@@ -345,7 +345,64 @@ function renderMbar() {
   $('#mbar').innerHTML = h;
 }
 
+// Вехи пути для журнала: начал заполнять первый экран, дошёл до готового плана
+let lastScreen = null;
+let startLogged = false;
+function trackScreens() {
+  if (!U.preview && !U.managerOnly) {
+    if (U.screen === 'final' && lastScreen !== 'final' && U.plan?.plan_id) api.clientLog('ui', { ...logCtx(), text: 'final_reached' });
+    if (U.screen === 'start' && lastScreen !== 'start') startLogged = false;
+  }
+  lastScreen = U.screen;
+}
+function startBegin(e) {
+  if (startLogged || U.preview || U.screen !== 'start' || !e.target.closest?.('#startScr')) return;
+  startLogged = true;
+  api.clientLog('ui', { screen: 'старт', text: 'start_begin' });
+}
+['input', 'change', 'drop'].forEach(t => document.addEventListener(t, startBegin, true));
+
+// Все нажатия и выборы: копятся и уходят пачкой раз в 5 секунд и при уходе со страницы
+let clickBuf = [];
+function clickLabel(el) {
+  const t = (el.getAttribute('aria-label') || el.textContent || el.value || '').replace(/\s+/g, ' ').trim();
+  return t.slice(0, 120);
+}
+function clickAction(el) {
+  const keys = Object.keys(el.dataset || {});
+  if (keys.length) return keys.map(k => (el.dataset[k] && el.dataset[k] !== '1' ? `${k}=${el.dataset[k]}` : k)).join(' ').slice(0, 60);
+  return el.tagName.toLowerCase() + (el.type ? `:${el.type}` : '');
+}
+function recordClick(e) {
+  const el = e.target.closest?.('button,a,[data-go],input[type=checkbox],input[type=radio],label,.chip,[role=button]');
+  if (!el || el.closest('#fbText')) return;
+  const item = { t: new Date().toISOString(), screen: screenName(), action: clickAction(el), label: clickLabel(el) };
+  if (el.matches('input[type=checkbox],input[type=radio]')) item.value = el.checked ? 'отмечено' : 'снято';
+  clickBuf.push(item);
+  if (clickBuf.length >= 40) flushClicks();
+}
+// Введённый текст: пишем итог, когда человек вышел из поля
+function recordInput(e) {
+  const el = e.target;
+  if (!el.matches?.('input[type=text],input:not([type]),textarea,select') || el.id === 'fbText') return;
+  const v = String(el.value || '').trim();
+  if (!v) return;
+  clickBuf.push({ t: new Date().toISOString(), screen: screenName(), action: `ввод ${el.id || el.name || el.tagName.toLowerCase()}`, label: (el.closest('.field2,.q,label')?.querySelector('label')?.textContent || el.placeholder || '').replace(/\s+/g, ' ').trim().slice(0, 120), value: v.slice(0, 300) });
+}
+function flushClicks() {
+  if (!clickBuf.length) return;
+  const items = clickBuf.splice(0, clickBuf.length);
+  api.clientLog('clicks', { plan_id: U.plan?.plan_id || U.planId || '', version: U.plan?.version || null, items });
+}
+document.addEventListener('click', recordClick, true);
+document.addEventListener('change', recordInput, true);
+setInterval(flushClicks, 5000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushClicks(); });
+window.addEventListener('pagehide', flushClicks);
+document.addEventListener('click', e => { if (e.target.closest?.('#startScr [data-demo],#startScr [data-demof],#startScr .drop,#startScr label')) startBegin(e); }, true);
+
 function render() {
+  trackScreens();
   renderTop();
   ['startScr', 'workScr', 'finalScr'].forEach(id => $('#' + id).classList.add('hidden'));
   if (['start', 'build'].includes(U.screen)) { $('#startScr').classList.remove('hidden'); $('#scard').innerHTML = startHTML(); bindStart(); }
@@ -498,6 +555,25 @@ function endPreview() {
   Object.assign(U, U.saved || {}, { preview: false, saved: null, screen: 'start' });
   render(); window.scrollTo(0, 0);
 }
+// ----- журнал: отзыв тестировщика и ошибки страницы -----
+const screenName = () => (U.preview ? 'пример плана' : { start: 'старт', build: 'сборка', work: 'уточнение', final: 'готово к встрече' }[U.screen] || U.screen || '');
+const logCtx = () => ({ plan_id: U.plan?.plan_id || U.planId || '', version: U.plan?.version || null, screen: screenName() });
+function showFeedback() {
+  $('#hist').innerHTML = '<div class="histp help fbp"><div class="hh"><b>Сообщить о проблеме</b><button class="x" data-hclose="1" aria-label="Закрыть">×</button></div>'
+    + '<p>Что ты делал, что увидел и что ожидал. Номер плана, версия и экран приложатся сами.</p>'
+    + '<textarea id="fbText" rows="6" placeholder="Например: нажал «Не про меня», а направление осталось в плане"></textarea>'
+    + `<p class="h">Сейчас: ${esc(screenName())}${U.plan?.version ? `, версия ${U.plan.version}` : ''}</p>`
+    + '<div class="fbrow"><button class="btn" data-fbsend="1">Отправить</button></div></div>';
+  setTimeout(() => $('#fbText')?.focus(), 30);
+}
+let errCount = 0;
+function reportError(message, where) {
+  if (errCount++ >= 10) return;
+  api.clientLog('client_error', { ...logCtx(), text: String(message || '').slice(0, 500), where: String(where || '').slice(0, 300) });
+}
+window.addEventListener('error', e => reportError(e.message, `${e.filename || ''}:${e.lineno || ''}:${e.colno || ''}`));
+window.addEventListener('unhandledrejection', e => reportError(e.reason?.message || e.reason, String(e.reason?.stack || '').split('\n').slice(0, 2).join(' ')));
+
 function showHelp() {
   $('#hist').innerHTML = '<div class="histp help"><div class="hh"><b>Как пользоваться</b><button class="x" data-hclose="1" aria-label="Закрыть">×</button></div>'
     + '<p>Три шага, анкеты нет.</p><ol>'
@@ -529,6 +605,14 @@ document.addEventListener('click', async e => {
     if (d.preview) { $('#hist').innerHTML = ''; await openPreview(); return; }
     if (d.endpreview) { endPreview(); return; }
     if (d.help) { showHelp(); return; }
+    if (d.feedback) { showFeedback(); return; }
+    if (d.fbsend) {
+      const text = ($('#fbText')?.value || '').trim();
+      if (!text) { $('#fbText')?.focus(); return; }
+      api.clientLog('feedback', { ...logCtx(), text });
+      $('#hist').innerHTML = '<div class="histp help fbp"><div class="hh"><b>Спасибо</b><button class="x" data-hclose="1" aria-label="Закрыть">×</button></div><p>Отзыв записан вместе с номером плана и версией.</p></div>';
+      return;
+    }
     if (d.rmfile) { U.files.splice(+d.rmfile, 1); render(); return; }
     if (d.demof) { await addDemo(+d.demof); return; }
     if (d.demo === 'lead') {
@@ -577,7 +661,7 @@ document.addEventListener('click', async e => {
     if (d.hclose) { $('#hist').innerHTML = ''; return; }
     if (d.restore) { $('#hist').innerHTML = ''; applyResult(await api.restore(U.planId, d.restore)); toast(`Вернул версию ${d.restore}`); return; }
     if (d.mview) { if (!U.mview) await loadManagerView(); U.mview = !U.mview; render(); return; }
-    if (d.dl) { download(d.dl); return; }
+    if (d.dl) { api.clientLog('download', { ...logCtx(), text: d.dl }); download(d.dl); return; }
     if (d.sendmgr) {
       const email = $('#mgrEmail')?.value.trim() || '';
       const r = await api.send(U.planId, email);
