@@ -551,3 +551,7 @@ table.ptab td:first-child{width:42%}
 li:hover>.wact,.wact:focus-within{opacity:1}
 @media (hover:none){.wact{opacity:1}}
 .basis{background:transparent;border-left:0;border-top:1px solid var(--line);padding:12px 0 0}
+.fbbtn{margin-right:8px}
+.fbp textarea{width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:6px;resize:vertical;margin:6px 0}
+.fbp .fbrow{display:flex;justify-content:flex-end}
+@media (max-width:760px){.fbbtn{font-size:12px;padding:6px 10px}}
