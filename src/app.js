@@ -1,4 +1,4 @@
-import { clarificationHTML, needsClarification, planComplete } from './clarifications.js';
+import { clarificationHTML, needsClarification, planComplete } from './clarifications.js?v=feedback-20261118';
 // Экраны ИПР·AI: вход, материалы, сборка, уточнение, готовый план, вид руководителя.
 import { HttpApi, DemoApi } from './api.js?v=startup-20261118';
 import { planHTML, exportHTML, esc, low, cap, listRu, plural, TYPE_LABEL, TIME, GOALS, PREV_ST, goalShort, hyp, dir } from './render.js';

@@ -561,3 +561,7 @@ li:hover>.wact,.wact:focus-within{opacity:1}
 .clarify-question textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #c9c6c0; border-radius: 8px; font: inherit; resize: vertical; min-height: 110px; }
 .clarify-question textarea:focus { outline: 2px solid #576e60; outline-offset: 2px; }
 .clarify .btn { margin: 5px 5px 5px 0; }
+
+.clarify-feedback { border-left: 4px solid #8b7ab8; background: #f4f1fa; color: #26212e; padding: 18px 20px; margin: 20px 0; line-height: 1.55; }
+.clarify-feedback p:last-child { margin-bottom: 0; }
+.clarify-hint { font-size: 14px; line-height: 1.55; color: #494252; background: #f6f5f8; padding: 12px; border-radius: 6px; }
