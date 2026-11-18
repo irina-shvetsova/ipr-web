@@ -159,6 +159,7 @@ function directionsHTML(s, o) {
   const { ref } = zoneNumbers(s);
   const draft = o.mode === 'draft';
   const P = (s.selected || []).filter(id => dir(s, id));
+  if (!P.length) return '<p class="later">Направления пока не сформированы.</p>';
   let x = `<p>${P.length === 1 ? 'Одно направление' : P.length === 2 ? 'Два направления' : 'Три направления'} на год, шаги расписаны на ближайший квартал. Больше трёх навыков за квартал не берём.</p>`;
   P.forEach((id, i) => {
     const d = dir(s, id);
