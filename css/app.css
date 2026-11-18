@@ -555,3 +555,9 @@ li:hover>.wact,.wact:focus-within{opacity:1}
 .fbp textarea{width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:6px;resize:vertical;margin:6px 0}
 .fbp .fbrow{display:flex;justify-content:flex-end}
 @media (max-width:760px){.fbbtn{font-size:12px;padding:6px 10px}}
+
+.clarify-question { margin: 24px 0; }
+.clarify-question label { display: block; line-height: 1.5; }
+.clarify-question textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #c9c6c0; border-radius: 8px; font: inherit; resize: vertical; min-height: 110px; }
+.clarify-question textarea:focus { outline: 2px solid #576e60; outline-offset: 2px; }
+.clarify .btn { margin: 5px 5px 5px 0; }

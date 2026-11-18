@@ -34,6 +34,9 @@ export class HttpApi {
   upload(planId, name, base64) { return this.req('POST', `/plans/${planId}/materials`, { file_name: name, content_base64: base64 }); }
   build(planId) { return this.req('POST', `/plans/${planId}/build`); }
   job(jobId) { return this.req('GET', `/jobs/${jobId}`); }
+  saveClarifications(planId, version, answers) { return this.req('PUT', `/plans/${planId}/clarifications`, { version, answers }); }
+  submitClarifications(planId, version, answers) { return this.req('POST', `/plans/${planId}/clarifications`, { version, answers }); }
+  retryDirections(planId) { return this.req('POST', `/plans/${planId}/retry-directions`); }
   getPlan(planId, view) { return this.req('GET', `/plans/${planId}${view ? `?view=${view}` : ''}`); }
   ops(planId, ops, label) { return this.req('POST', `/plans/${planId}/ops`, { ops, label }); }
   tutor(planId, message) { return this.req('POST', `/plans/${planId}/tutor`, { message }); }

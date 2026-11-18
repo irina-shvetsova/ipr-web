@@ -1,3 +1,4 @@
+import { clarificationHTML, needsClarification, planComplete } from './clarifications.js';
 // Экраны ИПР·AI: вход, материалы, сборка, уточнение, готовый план, вид руководителя.
 import { HttpApi, DemoApi } from './api.js';
 import { planHTML, exportHTML, esc, low, cap, listRu, plural, TYPE_LABEL, TIME, GOALS, PREV_ST, goalShort, hyp, dir } from './render.js';
@@ -34,7 +35,7 @@ function questions() {
   q.push('time', 'goal', 'prio');
   return q;
 }
-const allDone = () => questions().every(k => confirmed().includes(k));
+const allDone = () => planComplete(U.plan) && questions().every(k => confirmed().includes(k));
 const QT = { prev: 'Как прошёл прошлый план?', tasks: 'Задачи квартала верны?', time: 'Сколько времени в неделю на развитие?', goal: 'Куда хочешь расти?', prio: 'С чего начать?', strengths: 'Что у тебя получается лучше всего?' };
 
 async function change(ops, label) {
@@ -79,7 +80,7 @@ function startHTML() {
     const steps = U.job?.steps?.length ? U.job.steps : ['Готовлю материалы'];
     const cur = U.job?.current ?? 0;
     $('#scard').className = 'scard center';
-    return `<div class="build" role="status" aria-live="polite"><h2>${U.plan?.version ? 'Обновляю черновик' : 'Собираю черновик плана'}</h2><ul class="blist">${steps.map((b, i) => `<li class="${i < cur ? 'done' : i === cur ? 'now' : ''}"><span class="d">${i < cur ? '✓' : ''}</span>${esc(b)}</li>`).join('')}</ul><p class="later" style="margin-top:14px">Обычно это занимает пару минут. Страницу можно не держать открытой: черновик сохранится.</p></div>`;
+    return `<div class="build" role="status" aria-live="polite"><h2>${U.plan?.clarifications?.submitted ? 'Собираю план по ответам' : 'Разбираю материалы'}</h2><ul class="blist">${steps.map((b, i) => `<li class="${i < cur ? 'done' : i === cur ? 'now' : ''}"><span class="d">${i < cur ? '✓' : ''}</span>${esc(b)}</li>`).join('')}</ul><p class="later" style="margin-top:14px">Обычно это занимает пару минут. Результат сохранится. Можно вернуться к этому плану позже.</p></div>`;
   }
   $('#scard').className = 'scard';
   if (!api.session) {
@@ -115,7 +116,7 @@ function startHTML() {
   h += `<div class="field2"><label for="story">Что сейчас забирает больше всего времени</label><textarea id="story" rows="2" placeholder="Например: недельный отчёт собираю без команды, потому что так быстрее">${esc(U.story)}</textarea><small>Из этого ответа строится объяснение того, куда на самом деле уходит время.</small></div></div>`;
   if (U.buildError) h += `<div class="bdiag" style="border-color:#c0392b;color:#8a2b20"><b>${esc(U.buildError.text)}</b>${U.buildError.detail ? `<p>Подробности: ${esc(U.buildError.detail)}</p>` : ''}</div>`;
   h += `<div class="basis" id="basis">${basisInner()}</div>`;
-  h += `<button class="btn wide" data-start="1" type="button"${canBuild() ? '' : ' disabled'}>Собрать черновик</button>`;
+  h += `<button class="btn wide" data-start="1" type="button"${canBuild() ? '' : ' disabled'}>Разобрать материалы</button>`;
   h += `<p class="demoline">Заполнить примером: <button class="link" data-demo="lead" type="button">руководитель группы</button>${api.demo ? '' : '<button class="link" data-demo="spec" type="button">ведущий аналитик</button>'}</p>`;
   return h;
 }
@@ -296,6 +297,7 @@ function buildDiagHTML() {
 }
 
 function bandHTML() {
+  if (U.plan.build_status === 'partial') return '<div class="band"><b>План собран частично</b><span>Не все направления удалось написать.</span><button class="btn" data-retry-directions="1">Дополнить план</button></div>';
   const chg = U.changes.length ? `<small>Только что обновлено: ${U.changes.map(c => `<button data-jump="${esc(c.anchor)}">${esc(c.text)}</button>`).join(', ')}</small>` : '';
   const tools = `<span class="btools"><button data-compact="1">${U.plan.compact ? 'Подробнее' : 'Короче'}</button><button data-hist="1">История версий · ${U.plan.version}</button><button data-dl="docx">Скачать черновик</button></span>`;
   if (allDone()) return `<div class="band ok"><span class="bl">Готов к встрече</span><span class="bt">Все уточнения учтены. Проверь документ целиком и скачай его.${chg}</span>${tools}<button class="btn" data-go="final">Открыть готовый план</button></div>`;
@@ -405,7 +407,8 @@ function render() {
   trackScreens();
   renderTop();
   ['startScr', 'workScr', 'finalScr'].forEach(id => $('#' + id).classList.add('hidden'));
-  if (['start', 'build'].includes(U.screen)) { $('#startScr').classList.remove('hidden'); $('#scard').innerHTML = startHTML(); bindStart(); }
+  if (U.screen === 'clarify') { $('#startScr').classList.remove('hidden'); $('#scard').className = 'scard'; $('#scard').innerHTML = clarificationHTML(U.plan, U.clarifyAnswers, U.busy); }
+  else if (['start', 'build'].includes(U.screen)) { $('#startScr').classList.remove('hidden'); $('#scard').innerHTML = startHTML(); bindStart(); }
   else if (U.screen === 'work') { $('#workScr').classList.remove('hidden'); renderSide(); renderDoc(); }
   else { $('#finalScr').classList.remove('hidden'); renderFinal(); }
   renderMbar();
@@ -449,6 +452,8 @@ async function startBuild() {
   try {
     const c = await api.createPlan({ profile: { name: U.name.trim(), role: U.role.trim(), persona: /руковод/i.test(U.role) ? 'lead' : 'spec' }, tasks: U.tasks, story: U.story });
     U.planId = c.plan.plan_id;
+    U.plan = c.plan;
+    try { sessionStorage.setItem('ipr_last_plan', U.planId); } catch { /* storage unavailable */ }
     for (const f of U.files.filter(x => !x.demoBad)) {
       const r = await api.upload(U.planId, f.name, f.base64);
       if (!r.material.readable) toast(`${f.name}: ${r.material.reason}`);
@@ -458,23 +463,60 @@ async function startBuild() {
     await poll(b.job_id);
   } catch (e) { fail(e); }
 }
-async function poll(jobId) {
-  for (;;) {
-    const { job } = await api.job(jobId);
-    U.job = job;
-    if (U.screen === 'build') $('#scard').innerHTML = startHTML();
-    if (job.status === 'done') break;
-    if (job.status === 'failed') { U.buildError = { text: job.error || 'Не получилось собрать черновик', detail: job.detail || '' }; U.screen = 'start'; render(); return; }
-    await new Promise(r => setTimeout(r, 900));
-  }
-  await openPlan(U.planId);
-  U.msgs = [{ w: 't', t: 'Я помогу поправить план своими словами: перенести или убрать шаг, добавить своё действие, сделать документ короче, объяснить, почему главное именно это.' }];
+let pollToken = 0;
+let saveTimer;
+let saveChain = Promise.resolve();
+const draftKey = p => `ipr_clarify_${p.plan_id}_${p.version}`;
+function rememberDraft() {
+  try { sessionStorage.setItem(draftKey(U.plan), JSON.stringify(U.clarifyAnswers)); } catch { /* storage unavailable */ }
 }
-async function openPlan(planId) {
+function saveClarificationDraft() {
+  clearTimeout(saveTimer);
+  const planId = U.planId, version = U.plan.version, answers = { ...U.clarifyAnswers };
+  const show = text => { if (U.planId === planId && $('#clarify-save-status')) $('#clarify-save-status').textContent = text; };
+  show('Сохраняю ответы…');
+  saveChain = saveChain.catch(() => {}).then(() => api.saveClarifications(planId, version, answers));
+  return saveChain.then(() => show('Ответы сохранены.'), e => { show('Не удалось сохранить на сервере. Ответы остались в этой вкладке; нажми «Сохранить ответы».'); throw e; });
+}
+async function poll(jobId) {
+  const token = ++pollToken;
+  U.pollJob = jobId;
+  try {
+    while (token === pollToken) {
+      const { job } = await api.job(jobId);
+      if (token !== pollToken) return;
+      U.job = job;
+      if (['done', 'needs_clarification', 'needs_more_evidence', 'partial'].includes(job.status)) { await openPlan(U.planId, false); return; }
+      if (job.status === 'failed') {
+        U.buildError = { text: job.error || 'Не получилось собрать план', detail: job.detail || '' };
+        const r = await api.getPlan(U.planId); U.plan = r.plan;
+        U.screen = needsClarification(U.plan) ? 'clarify' : 'start';
+        U.clarifyAnswers = { ...(U.plan.clarifications?.answers || {}) };
+        render(); toast(job.error || 'Сборка остановлена'); return;
+      }
+      if (U.screen === 'build') $('#scard').innerHTML = startHTML();
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  } catch (e) {
+    if (token !== pollToken) return;
+    $('#scard').innerHTML = `<div class="bdiag"><p>${esc(e.message)}</p><p>Сборка может продолжаться на сервере.</p><button class="btn" data-resume-poll="1">Проверить статус</button></div>`;
+  }
+}
+async function openPlan(planId, resume = true) {
+  ++pollToken;
   const r = await api.getPlan(planId);
   U.planId = planId; U.plan = r.plan; U.pend = {}; U.changes = [];
+  try { sessionStorage.setItem('ipr_last_plan', planId); } catch { /* storage unavailable */ }
+  U.clarifyAnswers = { ...(U.plan.clarifications?.answers || {}) };
+  if (needsClarification(U.plan)) {
+    try { Object.assign(U.clarifyAnswers, JSON.parse(sessionStorage.getItem(draftKey(U.plan)) || '{}')); } catch { /* storage unavailable */ }
+  }
+  if (resume && U.plan.active_job) {
+    const { job } = await api.job(U.plan.active_job);
+    if (['queued', 'running'].includes(job.status)) { U.screen = 'build'; render(); await poll(job.job_id); return; }
+  }
   U.open = questions().find(q => !confirmed().includes(q)) || null;
-  U.screen = allDone() ? 'final' : 'work';
+  U.screen = needsClarification(U.plan) ? 'clarify' : U.plan.build_status === 'materials_changed' ? 'start' : allDone() ? 'final' : 'work';
   render();
 }
 async function confirmQ(k) {
@@ -556,7 +598,7 @@ function endPreview() {
   render(); window.scrollTo(0, 0);
 }
 // ----- журнал: отзыв тестировщика и ошибки страницы -----
-const screenName = () => (U.preview ? 'пример плана' : { start: 'старт', build: 'сборка', work: 'уточнение', final: 'готово к встрече' }[U.screen] || U.screen || '');
+const screenName = () => (U.preview ? 'пример плана' : { start: 'старт', build: 'сборка', clarify: 'вопросы до плана', work: 'уточнение', final: 'готово к встрече' }[U.screen] || U.screen || '');
 const logCtx = () => ({ plan_id: U.plan?.plan_id || U.planId || '', version: U.plan?.version || null, screen: screenName() });
 function showFeedback() {
   $('#hist').innerHTML = '<div class="histp help fbp"><div class="hh"><b>Сообщить о проблеме</b><button class="x" data-hclose="1" aria-label="Закрыть">×</button></div>'
@@ -576,9 +618,9 @@ window.addEventListener('unhandledrejection', e => reportError(e.reason?.message
 
 function showHelp() {
   $('#hist').innerHTML = '<div class="histp help"><div class="hh"><b>Как пользоваться</b><button class="x" data-hclose="1" aria-label="Закрыть">×</button></div>'
-    + '<p>Три шага, анкеты нет.</p><ol>'
-    + '<li><span class="vn">1</span><span class="vt"><b>Загрузи материалы или расскажи о работе</b><small>Подойдут отчёт 360 любой методики, прошлый ИПР, заметки после встреч, описание должности. Если документов нет, хватит роли и задач квартала.</small></span></li>'
-    + '<li><span class="vn">2</span><span class="vt"><b>Уточни черновик</b><small>Слева несколько коротких вопросов. После каждого ответа план перестраивается. Объяснения, которые не про тебя, можно отклонить. Тьютору можно написать своими словами: перенести шаг, сделать короче.</small></span></li>'
+    + '<p>Сначала уточнения, затем план.</p><ol>'
+    + '<li><span class="vn">1</span><span class="vt"><b>Загрузи материалы или расскажи о работе</b><small>Подойдут отчёт 360 любой методики, прошлый ИПР, заметки после встреч, описание должности. Если документов нет, добавь рассказ о своей работе.</small></span></li>'
+    + '<li><span class="vn">2</span><span class="vt"><b>Ответь на вопросы по материалам</b><small>Сначала проверим наблюдения на твоих примерах и соберём черновик. Затем его можно уточнить. После каждого ответа план перестраивается. Объяснения, которые не про тебя, можно отклонить. Тьютору можно написать своими словами: перенести шаг, сделать короче.</small></span></li>'
     + '<li><span class="vn">3</span><span class="vt"><b>Подготовься к встрече</b><small>Проверь, как план увидит руководитель, скачай документ или отправь ссылку. Все версии хранятся в истории.</small></span></li>'
     + '</ol><p><button class="link" data-preview="1">Посмотреть пример готового плана</button></p></div>';
 }
@@ -588,6 +630,21 @@ document.addEventListener('click', async e => {
   if (!el) return;
   const d = el.dataset;
   try {
+    if (d.clarifySave) { await saveClarificationDraft(); return; }
+    if (d.clarifySubmit) {
+      if (U.busy) return;
+      if (U.plan.clarifications.questions.some(q => (U.clarifyAnswers[q.id] || '').trim().length < 5)) { toast('Ответь на каждый вопрос. Можно написать «не знаю» или объяснить несогласие.'); return; }
+      U.busy = true; clearTimeout(saveTimer); render();
+      try {
+        await saveChain.catch(() => {});
+        const r = await api.submitClarifications(U.planId, U.plan.version, U.clarifyAnswers);
+        U.plan.clarifications.submitted = true;
+        U.screen = 'build'; U.job = null; render(); await poll(r.job_id);
+      } finally { U.busy = false; if (U.screen === 'clarify') render(); }
+      return;
+    }
+    if (d.resumePoll) { U.screen = 'build'; render(); await poll(U.pollJob); return; }
+    if (d.retryDirections) { el.disabled = true; const r = await api.retryDirections(U.planId); U.screen = 'build'; U.job = null; render(); await poll(r.job_id); return; }
     if (d.go) { if (d.go === 'final' && !allDone()) { toast('Сначала ответь на вопросы'); return; } U.screen = d.go; U.mview = false; render(); window.scrollTo(0, 0); return; }
     if (d.back) { U.screen = 'work'; U.mview = false; render(); return; }
     if (el.closest('[data-home]')) { if (U.preview) { endPreview(); return; } if (!U.managerOnly) { U.screen = 'start'; render(); } return; }
@@ -676,6 +733,14 @@ document.addEventListener('click', async e => {
     }
   } catch (err) { fail(err); }
 });
+document.addEventListener('input', e => {
+  const id = e.target.dataset?.clarifyAnswer;
+  if (!id || U.screen !== 'clarify') return;
+  U.clarifyAnswers[id] = e.target.value;
+  rememberDraft(); clearTimeout(saveTimer);
+  if ($('#clarify-save-status')) $('#clarify-save-status').textContent = 'Есть несохранённые изменения…';
+  saveTimer = setTimeout(() => { saveClarificationDraft().catch(() => {}); }, 700);
+});
 document.addEventListener('change', async e => {
   const t = e.target;
   if (t.dataset.rejmeet) { const h = hyp(U.plan, t.dataset.rejmeet); await change([{ op: 'reject_hypothesis', hypothesis_id: h.id, reason: h.reject_reason, discuss: t.checked }], 'отметку для встречи'); }
@@ -705,6 +770,7 @@ async function boot() {
     try { await api.guest(''); } catch (e) { toast(e.message); }
   }
   await loadPlans();
+  try { const last = sessionStorage.getItem('ipr_last_plan'); if (last && api.session) { await openPlan(last); return; } } catch { /* old session or deleted plan */ }
   render();
 }
 window.addEventListener('hashchange', () => { if (location.hash.includes('login=')) boot(); });
