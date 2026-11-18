@@ -1,6 +1,6 @@
 import { clarificationHTML, needsClarification, planComplete } from './clarifications.js';
 // Экраны ИПР·AI: вход, материалы, сборка, уточнение, готовый план, вид руководителя.
-import { HttpApi, DemoApi } from './api.js';
+import { HttpApi, DemoApi } from './api.js?v=startup-20261118';
 import { planHTML, exportHTML, esc, low, cap, listRu, plural, TYPE_LABEL, TIME, GOALS, PREV_ST, goalShort, hyp, dir } from './render.js';
 
 const $ = s => document.querySelector(s);
@@ -76,6 +76,9 @@ function renderTop() {
 // ---------------------------------------------------------------- старт и вход
 
 function startHTML() {
+  if (U.booting) return '<div class="sblock" role="status"><h3>Подключаюсь к приложению…</h3><p class="sh2">Проверяю доступ и загружаю сохранённые планы.</p></div>';
+  if (U.bootError) return `<div class="sblock" role="alert"><h3>Не удалось подключиться к приложению</h3><p class="sh2">${esc(U.bootError)}</p><p>Проверь, что новая версия API-функции запущена, и попробуй ещё раз.</p><button class="btn" data-retry-boot="1">Повторить подключение</button></div>`;
+
   if (U.screen === 'build') {
     const steps = U.job?.steps?.length ? U.job.steps : ['Готовлю материалы'];
     const cur = U.job?.current ?? 0;
@@ -630,6 +633,7 @@ document.addEventListener('click', async e => {
   if (!el) return;
   const d = el.dataset;
   try {
+    if (d.retryBoot) { await boot(); return; }
     if (d.clarifySave) { await saveClarificationDraft(); return; }
     if (d.clarifySubmit) {
       if (U.busy) return;
@@ -754,7 +758,18 @@ async function loadPlans() {
   try { U.plans = (await api.listPlans()).plans; } catch (e) { if (e.status !== 401) toast(e.message); }
 }
 async function boot() {
-  if (!api.demo) { try { U.auth = await api.authConfig(); } catch { U.auth = { mode: 'email' }; } }
+  if (U.booting) return;
+  U.booting = true; U.bootError = null; render();
+  try {
+    if (!api.demo) U.auth = await api.authConfig();
+    await finishBoot();
+  } catch (e) {
+    U.screen = 'start'; U.bootError = e.message || 'Сервер не отвечает.';
+  } finally {
+    U.booting = false; render();
+  }
+}
+async function finishBoot() {
   const hash = new URLSearchParams(location.hash.slice(1));
   if (hash.get('login')) {
     const plan = hash.get('plan');
@@ -770,6 +785,7 @@ async function boot() {
     try { await api.guest(''); } catch (e) { toast(e.message); }
   }
   await loadPlans();
+  U.booting = false;
   try { const last = sessionStorage.getItem('ipr_last_plan'); if (last && api.session) { await openPlan(last); return; } } catch { /* old session or deleted plan */ }
   render();
 }

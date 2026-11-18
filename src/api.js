@@ -15,11 +15,20 @@ export class HttpApi {
     try { t ? localStorage.setItem('ipr_session', t) : localStorage.removeItem('ipr_session'); } catch { /* */ }
   }
   async req(method, path, body) {
-    const res = await fetch(this.base + path, {
+    let res;
+    try {
+    res = await fetch(this.base + path, {
       method,
+      signal: AbortSignal.timeout(method === 'GET' || path.startsWith('/auth/') ? 30000 : 240000),
       headers: { 'Content-Type': 'application/json', ...(this.session ? { Authorization: `Bearer ${this.session}` } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
+    } catch (cause) {
+      const e = new Error(cause.name === 'TimeoutError' || cause.name === 'AbortError'
+        ? 'Сервер не ответил вовремя. Проверь статус и попробуй ещё раз.'
+        : 'Нет соединения с сервером приложения. Проверь подключение и доступность API.');
+      e.cause = cause; throw e;
+    }
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) this.setSession(null, !this.temp);
     if (!res.ok) { const e = new Error(data.error || `Ошибка ${res.status}`); e.status = res.status; throw e; }
