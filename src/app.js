@@ -117,7 +117,7 @@ function startHTML() {
   h += `<div class="field2"><label for="meRole">Роль</label><input id="meRole" type="text" placeholder="Например: руководитель группы аналитики или эксперт" value="${esc(U.role)}"><div class="rolechips">${ROLES.map(r => `<button class="chip${U.role === r ? ' on' : ''}" data-role="${esc(r)}" type="button">${esc(r)}</button>`).join('')}</div></div>`;
   h += `<div class="field2"><label>Какие задачи у тебя в этом квартале</label>${tasksHTML()}</div>`;
   h += `<div class="field2"><label for="story">Что сейчас забирает больше всего времени</label><textarea id="story" rows="2" placeholder="Например: недельный отчёт собираю без команды, потому что так быстрее">${esc(U.story)}</textarea><small>Из этого ответа строится объяснение того, куда на самом деле уходит время.</small></div></div>`;
-  if (U.buildError) h += `<div class="bdiag" style="border-color:#c0392b;color:#8a2b20"><b>${esc(U.buildError.text)}</b>${U.buildError.detail ? `<p>Подробности: ${esc(U.buildError.detail)}</p>` : ''}</div>`;
+
   h += `<div class="basis" id="basis">${basisInner()}</div>`;
   h += `<button class="btn wide" data-start="1" type="button"${canBuild() ? '' : ' disabled'}>Разобрать материалы</button>`;
   h += `<p class="demoline">Заполнить примером: <button class="link" data-demo="lead" type="button">руководитель группы</button>${api.demo ? '' : '<button class="link" data-demo="spec" type="button">ведущий аналитик</button>'}</p>`;
@@ -406,11 +406,19 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pagehide', flushClicks);
 document.addEventListener('click', e => { if (e.target.closest?.('#startScr [data-demo],#startScr [data-demof],#startScr .drop,#startScr label')) startBegin(e); }, true);
 
+function failedBuild(job) {
+  U.buildError = { text: job.error || 'Сборка остановлена.', phase: job.phase || 'clarify', jobId: job.job_id };
+  U.screen = 'failed';
+}
+function failureHTML() {
+  return `<h2>Сборка остановлена</h2><div class="bdiag" role="alert"><p>${esc(U.buildError?.text || 'Не удалось завершить сборку.')}</p><p>Материалы и сохранённые ответы остались в этом плане. Повтор запускается только по нажатию кнопки.</p><button class="btn" data-retry-build="1" ${U.busy ? 'disabled' : ''}>${U.busy ? 'Запускаю…' : 'Повторить сборку'}</button>${U.buildError?.phase === 'finalize' ? '<button class="btn ghost" data-edit-clarifications="1">Проверить ответы</button>' : ''}</div>`;
+}
 function render() {
   trackScreens();
   renderTop();
   ['startScr', 'workScr', 'finalScr'].forEach(id => $('#' + id).classList.add('hidden'));
-  if (U.screen === 'clarify') { $('#startScr').classList.remove('hidden'); $('#scard').className = 'scard'; $('#scard').innerHTML = clarificationHTML(U.plan, U.clarifyAnswers, U.busy); }
+  if (U.screen === 'failed') { $('#startScr').classList.remove('hidden'); $('#scard').className = 'scard'; $('#scard').innerHTML = failureHTML(); }
+  else if (U.screen === 'clarify') { $('#startScr').classList.remove('hidden'); $('#scard').className = 'scard'; $('#scard').innerHTML = clarificationHTML(U.plan, U.clarifyAnswers, U.busy); }
   else if (['start', 'build'].includes(U.screen)) { $('#startScr').classList.remove('hidden'); $('#scard').innerHTML = startHTML(); bindStart(); }
   else if (U.screen === 'work') { $('#workScr').classList.remove('hidden'); renderSide(); renderDoc(); }
   else { $('#finalScr').classList.remove('hidden'); renderFinal(); }
@@ -491,9 +499,8 @@ async function poll(jobId) {
       U.job = job;
       if (['done', 'needs_clarification', 'needs_more_evidence', 'partial'].includes(job.status)) { await openPlan(U.planId, false); return; }
       if (job.status === 'failed') {
-        U.buildError = { text: job.error || 'Не получилось собрать план', detail: job.detail || '' };
+        failedBuild(job);
         const r = await api.getPlan(U.planId); U.plan = r.plan;
-        U.screen = needsClarification(U.plan) ? 'clarify' : 'start';
         U.clarifyAnswers = { ...(U.plan.clarifications?.answers || {}) };
         render(); toast(job.error || 'Сборка остановлена'); return;
       }
@@ -508,6 +515,7 @@ async function poll(jobId) {
 async function openPlan(planId, resume = true) {
   ++pollToken;
   const r = await api.getPlan(planId);
+  U.buildError = null;
   U.planId = planId; U.plan = r.plan; U.pend = {}; U.changes = [];
   try { sessionStorage.setItem('ipr_last_plan', planId); } catch { /* storage unavailable */ }
   U.clarifyAnswers = { ...(U.plan.clarifications?.answers || {}) };
@@ -516,6 +524,7 @@ async function openPlan(planId, resume = true) {
   }
   if (resume && U.plan.active_job) {
     const { job } = await api.job(U.plan.active_job);
+    if (job.status === 'failed') { failedBuild(job); render(); return; }
     if (['queued', 'running'].includes(job.status)) { U.screen = 'build'; render(); await poll(job.job_id); return; }
   }
   U.open = questions().find(q => !confirmed().includes(q)) || null;
@@ -633,6 +642,18 @@ document.addEventListener('click', async e => {
   if (!el) return;
   const d = el.dataset;
   try {
+    if (d.editClarifications) { U.screen = 'clarify'; render(); return; }
+    if (d.retryBuild) {
+      if (U.busy) return;
+      U.busy = true; render();
+      try {
+        const phase = U.buildError?.phase;
+        const r = phase === 'finalize' ? await api.submitClarifications(U.planId, U.plan.version, U.clarifyAnswers)
+          : phase === 'directions' ? await api.retryDirections(U.planId) : await api.build(U.planId);
+        U.buildError = null; U.screen = 'build'; U.job = null; render(); await poll(r.job_id);
+      } finally { U.busy = false; if (U.screen === 'failed') render(); }
+      return;
+    }
     if (d.retryBoot) { await boot(); return; }
     if (d.clarifySave) { await saveClarificationDraft(); return; }
     if (d.clarifySubmit) {

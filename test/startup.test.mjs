@@ -32,3 +32,11 @@ test('startup failure is visible and retry recovers without reloading', async ()
   await vm.runInContext('boot()',context);
   assert.match(card.innerHTML,/Код доступа/);
 });
+
+test('failed build displays persistent recovery with escaped error and saved answers', async () => {
+  const {context,card}=start(async()=>({mode:'guest',code_required:true})); await tick();
+  vm.runInContext(`U.planId='saved'; U.clarifyAnswers={q1:'Мой пример'}; failedBuild({job_id:'old',phase:'finalize',error:'Сбой <script>'}); render();`,context);
+  assert.match(card.innerHTML,/data-retry-build/); assert.match(card.innerHTML,/data-edit-clarifications/);
+  assert.match(card.innerHTML,/&lt;script&gt;/); assert.doesNotMatch(card.innerHTML,/<script>/);
+  assert.equal(vm.runInContext('U.clarifyAnswers.q1',context),'Мой пример');
+});
