@@ -1,7 +1,7 @@
 import { clarificationHTML, needsClarification, planComplete } from './clarifications.js?v=feedback-20261118';
 // Экраны ИПР·AI: вход, материалы, сборка, уточнение, готовый план, вид руководителя.
 import { HttpApi, DemoApi } from './api.js?v=startup-20261118';
-import { planHTML, exportHTML, esc, low, cap, listRu, plural, TYPE_LABEL, TIME, GOALS, PREV_ST, goalShort, hyp, dir } from './render.js';
+import { planHTML, exportHTML, esc, low, cap, listRu, plural, TYPE_LABEL, TIME, GOALS, PREV_ST, goalShort, hyp, dir, methodologyHTML } from './render.js?v=methodology-20261124';
 
 const $ = s => document.querySelector(s);
 const cfg = window.IPR_CONFIG || {};
@@ -11,7 +11,7 @@ const api = autoBase === 'demo' ? new DemoApi() : new HttpApi(autoBase);
 const U = {
   screen: 'start', plan: null, planId: null, tab: 'ask', open: null, pend: {}, msgs: [], flash: {}, changes: [],
   wmOpen: null, mview: false, mvPlan: null, mvHidden: [], files: [], tasks: [], story: '', name: '', role: '',
-  preview: false, saved: null, loginSent: null, plans: [], job: null, managerOnly: false, busy: false,
+  preview: false, saved: null, loginSent: null, plans: [], job: null, managerOnly: false, busy: false, tutorBusy: false, time: '3',
 };
 const DEMO_FILES = [
   { file: 'm1_360_profocenka.md', label: 'Отчёт 360' },
@@ -116,8 +116,10 @@ function startHTML() {
   h += `<div class="field2"><label for="meName">Как тебя зовут</label><input id="meName" type="text" placeholder="Необязательно" value="${esc(U.name)}"></div>`;
   h += `<div class="field2"><label for="meRole">Роль</label><input id="meRole" type="text" placeholder="Например: руководитель группы аналитики или эксперт" value="${esc(U.role)}"><div class="rolechips">${ROLES.map(r => `<button class="chip${U.role === r ? ' on' : ''}" data-role="${esc(r)}" type="button">${esc(r)}</button>`).join('')}</div></div>`;
   h += `<div class="field2"><label>Какие задачи у тебя в этом квартале</label>${tasksHTML()}</div>`;
-  h += `<div class="field2"><label for="story">Что сейчас забирает больше всего времени</label><textarea id="story" rows="2" placeholder="Например: недельный отчёт собираю без команды, потому что так быстрее">${esc(U.story)}</textarea><small>Из этого ответа строится объяснение того, куда на самом деле уходит время.</small></div></div>`;
+  h += `<div class="field2"><label for="story">Какую рабочую ситуацию сейчас важнее всего изменить</label><textarea id="story" rows="2" placeholder="Например: требования к новой функции приходится обсуждать повторно">${esc(U.story)}</textarea><small>Опиши, что происходит и почему тебе важно это изменить. Большие затраты времени сами по себе не означают, что нужен новый навык.</small></div></div>`;
 
+  h += `<div class="field2"><label for="initialTime">Сколько времени в неделю доступно для развития</label><select id="initialTime">${TIME.map(t => `<option value="${t.id}"${U.time === t.id ? ' selected' : ''}>${esc(t.t)}</option>`).join('')}</select></div>`;
+  h += methodologyHTML();
   h += `<div class="basis" id="basis">${basisInner()}</div>`;
   h += `<button class="btn wide" data-start="1" type="button"${canBuild() ? '' : ' disabled'}>Разобрать материалы</button>`;
   h += `<p class="demoline">Заполнить примером: <button class="link" data-demo="lead" type="button">руководитель группы</button>${api.demo ? '' : '<button class="link" data-demo="spec" type="button">ведущий аналитик</button>'}</p>`;
@@ -210,6 +212,7 @@ function qBody(k) {
     return h + okBtn(k);
   }
   if (k === 'tasks') {
+    if (!U.plan.tasks.length) return '<p class="qhint">Задачи квартала не указаны. Можно продолжить с рабочей ситуацией из уточняющих ответов; конкретную задачу для практики согласуйте перед началом.</p>' + okBtn(k);
     h += '<p class="qhint">Задачи с первого экрана. От них зависят объяснения и то, с чего начать. Чтобы поменять задачи, пересобери план с первого экрана.</p>';
     h += '<ul class="vlist">' + U.plan.tasks.map(t => `<li>${esc(t.title)}</li>`).join('') + '</ul>';
     return h + okBtn(k, !U.plan.tasks.length);
@@ -247,6 +250,7 @@ function qBody(k) {
       return `<button class="popt${on ? ' on' : ''}" data-prio="${r.hypothesis_id}" aria-pressed="${on}"${!on && P.length >= 3 ? ' disabled' : ''}><span class="pbox">${on ? num : ''}</span><span class="pt"><b>${esc(hyp(U.plan, r.hypothesis_id)?.topic)}${U.plan.selected.includes(r.hypothesis_id) && !U.plan.answers.prio?.touched ? '<span class="rec">Советуем</span>' : ''}</b><small>${esc(cap(r.reasons.join('; ')))}.</small></span></button>`;
     }).join('') + '</div>';
     if (P.length > n) h += `<div class="warnline"><b>Плотно</b> для выбранного времени. Можно оставить: тогда к встрече добавим вопрос о времени.</div>`;
+    if (U.plan.methodology_version >= 1) h += '<p class="qhint">Можно изменить выбор или предложить свой фокус. Свой фокус будет отмечен как твой запрос, а не вывод отчёта.</p><textarea id="ownFocus" rows="3" placeholder="Какую рабочую ситуацию хочешь изменить и что хочешь научиться делать иначе?"></textarea><button class="btn ghost" data-own-focus="1">Выбрать свой фокус</button>';
     return h + okBtn(k, !P.length);
   }
   return h;
@@ -266,7 +270,7 @@ function askHTML() {
   return h;
 }
 function tutorHTML() {
-  return '<div class="msgs" aria-live="polite">' + U.msgs.map(m => `<div class="m ${m.w}">${esc(m.t)}</div>`).join('') + '</div>';
+  return '<div class="msgs" aria-live="polite">' + U.msgs.map(m => `<div class="m ${m.w}">${esc(m.t)}</div>`).join('') + (U.tutorBusy ? '<div class="m t thinking" role="status">Тьютор готовит ответ<span aria-hidden="true"> ···</span></div>' : '') + '</div>';
 }
 function tutorFoot() {
   const sg = ['Почему главное именно это?', `Перенеси шаг 1 на ${low(U.plan.quarter.months[1])}`, 'Сделай короче'];
@@ -308,6 +312,7 @@ function bandHTML() {
   return `<div class="band"><span class="bl">Черновик</span><span class="bt">Это ещё не план. Ответь на ${left} ${plural(left, 'вопрос', 'вопроса', 'вопросов')} слева, и он перестроится под тебя.${chg}</span>${tools}<span class="dots">${questions().map(k => `<i class="${confirmed().includes(k) ? 'on' : ''}"></i>`).join('')}</span></div>`;
 }
 function renderDoc() {
+  $('#fdoc').innerHTML = '';
   // Каждая часть рисуется отдельно: сбой в одной не оставляет экран пустым и показывает причину
   const part = (name, fn) => { try { return fn(); } catch (e) { console.error(name, e); return `<div class="bdiag" open><p><b>Не удалось отрисовать: ${esc(name)}.</b> Пришли этот текст: ${esc(e?.message)} ${esc(String(e?.stack || '').split('\n').slice(1, 3).join(' '))}</p></div>`; } };
   $('#paper').innerHTML = part('полоса состояния', bandHTML) + part('диагностика сборки', buildDiagHTML) + part('план', () => planHTML(U.plan, { mode: 'draft', flash: U.flash, wmOpen: U.wmOpen }));
@@ -317,6 +322,7 @@ function renderDoc() {
 // ---------------------------------------------------------------- готовый план
 
 function renderFinal() {
+  $('#paper').innerHTML = '';
   if (U.preview) {
     $('.fbar-in').innerHTML = '<span class="pvnote">Это пример готового плана. Твой будет собран из твоих данных.</span><div class="fsp"></div><button class="btn sm" data-endpreview="1">Собрать свой план</button>';
     $('#fdoc').innerHTML = planHTML(U.plan, { mode: 'final' });
@@ -461,7 +467,7 @@ async function addDemo(i) {
 }
 async function startBuild() {
   try {
-    const c = await api.createPlan({ profile: { name: U.name.trim(), role: U.role.trim(), persona: /руковод/i.test(U.role) ? 'lead' : 'spec' }, tasks: U.tasks, story: U.story });
+    const c = await api.createPlan({ profile: { name: U.name.trim(), role: U.role.trim(), persona: /руковод/i.test(U.role) ? 'lead' : 'spec' }, tasks: U.tasks, story: U.story, time: U.time });
     U.planId = c.plan.plan_id;
     U.plan = c.plan;
     try { sessionStorage.setItem('ipr_last_plan', U.planId); } catch { /* storage unavailable */ }
@@ -552,18 +558,22 @@ function monthIn(text) {
 }
 async function sendTutor(text) {
   text = (text || '').trim();
-  if (!text) return;
+  if (!text || U.tutorBusy) return;
+  U.tutorBusy = true;
   U.msgs.push({ w: 'u', t: text }); renderSide();
   try {
     const r = await api.tutor(U.planId, text);
     U.msgs.push({ w: 't', t: r.reply });
     applyResult(r);
-  } catch (e) { U.msgs.push({ w: 't', t: e.message }); renderSide(); }
+  } catch (e) { U.msgs.push({ w: 't', t: e.message }); }
+  finally { U.tutorBusy = false; renderSide(); }
 }
 function bindTutor() {
   const ta = $('#ta');
   if (!ta) return;
   ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTutor(ta.value); } });
+  $('#send').disabled = U.tutorBusy;
+  ta.disabled = U.tutorBusy;
   $('#send').onclick = () => sendTutor(ta.value);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const mic = $('#mic');
@@ -634,7 +644,7 @@ function showHelp() {
     + '<li><span class="vn">1</span><span class="vt"><b>Загрузи материалы или расскажи о работе</b><small>Подойдут отчёт 360 любой методики, прошлый ИПР, заметки после встреч, описание должности. Если документов нет, добавь рассказ о своей работе.</small></span></li>'
     + '<li><span class="vn">2</span><span class="vt"><b>Ответь на вопросы по материалам</b><small>Сначала проверим наблюдения на твоих примерах и соберём черновик. Затем его можно уточнить. После каждого ответа план перестраивается. Объяснения, которые не про тебя, можно отклонить. Тьютору можно написать своими словами: перенести шаг, сделать короче.</small></span></li>'
     + '<li><span class="vn">3</span><span class="vt"><b>Подготовься к встрече</b><small>Проверь, как план увидит руководитель, скачай документ или отправь ссылку. Все версии хранятся в истории.</small></span></li>'
-    + '</ol><p><button class="link" data-preview="1">Посмотреть пример готового плана</button></p></div>';
+    + '</ol>' + methodologyHTML() + '<p><button class="link" data-preview="1">Посмотреть пример готового плана</button></p></div>';
 }
 
 document.addEventListener('click', async e => {
@@ -642,6 +652,25 @@ document.addEventListener('click', async e => {
   if (!el) return;
   const d = el.dataset;
   try {
+    if (d.practiceSave) {
+      const [hid,index] = d.practiceSave.split(':');
+      const root = document.querySelector(U.screen === 'work' ? '#paper' : '#fdoc');
+      const done = root.querySelector(`[data-practice-done="${d.practiceSave}"]`).checked;
+      const note = root.querySelector(`[data-practice-note="${d.practiceSave}"]`).value;
+      const review_date = root.querySelector(`[data-practice-date="${d.practiceSave}"]`).value;
+      applyResult(await api.ops(U.planId, [{ op: 'record_practice', hypothesis_id: hid, index: +index, done, note, review_date }], 'Проба и разбор результата')); toast('Результат сохранён'); return;
+    }
+    if (d.ownFocus) {
+      const text = ($('#ownFocus')?.value || '').trim();
+      if (text.length < 10) { toast('Опиши рабочую ситуацию подробнее'); return; }
+      if (U.busy) return;
+      U.busy = true; el.disabled = true; el.textContent = 'Готовлю направление…';
+      try { const result = await api.ops(U.planId, [{ op: 'own_focus', text }], 'Свой фокус'); delete U.pend.prio; applyResult(result); }
+      finally { U.busy = false; renderSide(); }
+      return;
+    }
+    if (d.bookRemove) { const [hid, index] = d.bookRemove.split(':'); applyResult(await api.ops(U.planId, [{ op: 'remove_book', hypothesis_id: hid, index: +index }], 'Книга прочитана или не подходит')); return; }
+    if (d.bookAdd) { const book_id = document.querySelector(`[data-book-select="${d.bookAdd}"]`)?.value; if (book_id) applyResult(await api.ops(U.planId, [{ op: 'add_book', hypothesis_id: d.bookAdd, book_id }], 'Книга из каталога')); return; }
     if (d.editClarifications) { U.screen = 'clarify'; render(); return; }
     if (d.retryBuild) {
       if (U.busy) return;
@@ -738,7 +767,7 @@ document.addEventListener('click', async e => {
     if (d.compact) { await change([{ op: 'set_compact', value: !U.plan.compact }], U.plan.compact ? 'полный документ' : 'короткий документ'); return; }
     if (d.askdir) { const t = dir(U.plan, d.askdir)?.title; U.tab = 'tutor'; renderSide(); $('#ta').value = `В направлении «${t}» `; $('#ta').focus(); return; }
     if (d.say) { await sendTutor(d.say); return; }
-    if (d.jump) { const id = { main: 'main', top: 'paper', s1: 's1', s2: 's2', s3: 's3', s6: 's6' }[d.jump] || d.jump; document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (d.jump) { const id = { main: 'main', top: 'paper', s1: 's1', s2: 's2', s3: 's3', s6: 's6' }[d.jump] || d.jump; (id === 'paper' ? document.querySelector(U.screen === 'work' ? '#paper' : '#fdoc') : document.querySelector(`${U.screen === 'work' ? '#paper' : '#fdoc'} #${id}`))?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (d.hist) { await showHistory(); return; }
     if (d.hclose) { $('#hist').innerHTML = ''; return; }
     if (d.restore) { $('#hist').innerHTML = ''; applyResult(await api.restore(U.planId, d.restore)); toast(`Вернул версию ${d.restore}`); return; }
@@ -812,3 +841,13 @@ async function finishBoot() {
 }
 window.addEventListener('hashchange', () => { if (location.hash.includes('login=')) boot(); });
 boot();
+
+document.addEventListener('change', e => { if (e.target?.id === 'initialTime') U.time = e.target.value; });
+
+document.addEventListener('click', e => {
+  const a = e.target.closest?.('a[href^="#s"]');
+  if (!a) return;
+  const id = a.getAttribute('href');
+  const target = document.querySelector(`${U.screen === 'work' ? '#paper' : '#fdoc'} ${id}`);
+  if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+});

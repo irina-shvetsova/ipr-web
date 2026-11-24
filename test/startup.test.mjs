@@ -40,3 +40,25 @@ test('failed build displays persistent recovery with escaped error and saved ans
   assert.match(card.innerHTML,/&lt;script&gt;/); assert.doesNotMatch(card.innerHTML,/<script>/);
   assert.equal(vm.runInContext('U.clarifyAnswers.q1',context),'Мой пример');
 });
+
+test('empty task list does not block confirmation and own focus input is available', async () => {
+  const {context}=start(async()=>({mode:'guest',code_required:true})); await tick();
+  vm.runInContext(`U.plan={methodology_version:1,tasks:[],facts:[],answers:{confirmed:[],time:'3'},selected:[],ranking:[]}; U.pend={};`,context);
+  assert.doesNotMatch(vm.runInContext("qBody('tasks')",context),/disabled/);
+  assert.match(vm.runInContext("qBody('prio')",context),/data-own-focus/);
+});
+
+test('tutor shows pending state, suppresses duplicate sends and clears pending after failure', async () => {
+ const {context}=start(async()=>({mode:'guest',code_required:true})); await tick();
+ let resolve;let calls=0;const pending=new Promise(r=>resolve=r);
+ context.tutorStub=()=>{calls++;return pending;};
+ vm.runInContext("api.tutor=tutorStub; renderSide=()=>{}; U.planId='test';",context);
+ const first=vm.runInContext("sendTutor('Почему это?')",context);
+ assert.equal(vm.runInContext('U.tutorBusy',context),true);
+ assert.match(vm.runInContext('tutorHTML()',context),/Тьютор готовит ответ/);
+ await vm.runInContext("sendTutor('Повтор')",context); assert.equal(calls,1);
+ resolve({reply:'Объяснение',changes:[]});await first;
+ assert.equal(vm.runInContext('U.tutorBusy',context),false);
+ context.tutorStub=()=>{throw Error('Нет соединения');};vm.runInContext('api.tutor=tutorStub',context);
+ await vm.runInContext("sendTutor('Снова')",context);assert.equal(vm.runInContext('U.tutorBusy',context),false);
+});

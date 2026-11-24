@@ -565,3 +565,7 @@ li:hover>.wact,.wact:focus-within{opacity:1}
 .clarify-feedback { border-left: 4px solid #8b7ab8; background: #f4f1fa; color: #26212e; padding: 18px 20px; margin: 20px 0; line-height: 1.55; }
 .clarify-feedback p:last-child { margin-bottom: 0; }
 .clarify-hint { font-size: 14px; line-height: 1.55; color: #494252; background: #f6f5f8; padding: 12px; border-radius: 6px; }
+
+.thinking span{animation:thinking 1.2s ease-in-out infinite}@keyframes thinking{50%{opacity:.25}}@media(prefers-reduced-motion:reduce){.thinking span{animation:none}}.book-controls select,.field2 select{max-width:100%;width:100%;padding:10px}.book-controls{margin-bottom:20px}.m{white-space:pre-wrap;overflow-wrap:anywhere}.methodology{margin:20px 0}.hrow>b{margin-right:8px}
+
+.export-only{display:none}.practice-controls{display:block;margin:12px 0;padding:12px;background:#f6f5fa}.practice-controls label{display:block;margin:8px 0}.practice-controls textarea{width:100%;min-height:90px}.practice-controls input[type=date]{padding:6px}.practice-controls summary{cursor:pointer}@media print{.practice-controls,.book-controls{display:none!important}.export-only{display:grid}}
